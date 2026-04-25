@@ -24,7 +24,7 @@ const NotFound = () => {
         <div className="grid place-items-center">
           <Ozing mood="confused" size={160} />
         </div>
-        <h1 className="font-display font-black text-7xl md:text-8xl tracking-tighter mt-4">
+        <h1 className="font-display text-7xl md:text-8xl tracking-tighter mt-4">
           <span className="text-gradient">404</span>
         </h1>
         <p className="font-serif italic text-2xl mt-2">Ozing got lost.</p>

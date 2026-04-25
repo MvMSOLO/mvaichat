@@ -173,8 +173,8 @@ export default function Chat() {
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-border/60">
         <div className="flex items-center gap-2 mb-4">
-          <div className="size-8 rounded-xl bg-ink grid place-items-center text-ink-foreground font-display font-black text-sm">M</div>
-          <span className="font-display font-black text-lg tracking-tight">MV AI</span>
+          <div className="size-8 rounded-xl bg-ink grid place-items-center text-ink-foreground font-display text-sm">M</div>
+          <span className="font-display text-lg tracking-tight">MV AI</span>
         </div>
         <Button onClick={newChat} className="w-full rounded-xl bg-ink text-ink-foreground hover:bg-ink/90 h-10 font-semibold shine">
           <Plus className="size-4" /> New chat
@@ -221,7 +221,8 @@ export default function Chat() {
   return (
     <div className="h-[100dvh] flex relative overflow-hidden bg-background">
       <div className="fixed inset-0 mesh-bg pointer-events-none" />
-      <div className="fixed inset-0 nebula-bg opacity-30 pointer-events-none" />
+      <div className="fixed inset-0 aurora-bg opacity-30 pointer-events-none" />
+      <div className="fixed inset-0 dot-grid-fade opacity-20 pointer-events-none" />
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-72 border-r border-border/60 glass-strong z-10">
@@ -420,7 +421,7 @@ function EmptyState({ model, onPick, mood }: { model: typeof MODELS[ModelId]; on
         <div className="absolute inset-0 rounded-full blur-3xl scale-110" style={{ background: `radial-gradient(circle, hsl(${model.gem} / 0.3), transparent 60%)` }} />
         <Ozing mood={mood} size={160} gemColor={`hsl(${model.gem})`} followCursor />
       </div>
-      <h2 className="font-display text-4xl md:text-5xl font-black tracking-tighter mt-4">
+      <h2 className="font-display text-4xl md:text-5xl tracking-tighter mt-4">
         Hi from <span className="font-serif italic" style={{ color: `hsl(${model.gem})` }}>{model.name}</span>
       </h2>
       <p className="text-muted-foreground mt-2 max-w-md">{model.tagline}</p>

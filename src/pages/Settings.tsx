@@ -67,7 +67,7 @@ export default function Settings() {
               <Ozing mood={moodForPersonality as any} size={100} />
             </div>
             <div>
-              <h1 className="font-display text-3xl font-black tracking-tighter">
+              <h1 className="font-display text-3xl tracking-tighter">
                 <span className="font-serif italic text-primary">Hello,</span> {name || "you"}
               </h1>
               <p className="text-sm text-muted-foreground">{user?.email}</p>

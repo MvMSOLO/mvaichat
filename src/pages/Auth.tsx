@@ -101,7 +101,7 @@ export default function Auth() {
             />
             <Ozing mood={mood} size={260} followCursor />
           </div>
-          <h2 className="mt-6 font-display text-3xl font-black tracking-tighter">
+          <h2 className="mt-6 font-display text-3xl tracking-tighter">
             <span className="font-serif italic text-primary">Hi</span>, I'm Ozing.
           </h2>
           <p className="mt-2 text-sm text-muted-foreground max-w-xs">
@@ -130,7 +130,7 @@ export default function Auth() {
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.3 }}
               >
-                <h1 className="text-3xl md:text-4xl font-display font-black tracking-tighter">
+                <h1 className="text-3xl md:text-4xl font-display tracking-tighter">
                   {mode === "signup" ? <>Make an <span className="font-serif italic text-primary">account</span></> :
                    mode === "forgot" ? <>Reset your <span className="font-serif italic text-primary">password</span></> :
                    <>Welcome <span className="font-serif italic text-primary">back</span></>}

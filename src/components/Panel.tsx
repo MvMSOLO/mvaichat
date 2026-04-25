@@ -97,7 +97,7 @@ export function Panel({ open, onClose }: PanelProps) {
             <Ozing mood="curious" size={32} />
           </div>
           <div>
-            <div className="font-display font-black text-sm tracking-tight">Mini Ozing</div>
+            <div className="font-display text-sm tracking-tight">Mini Ozing</div>
             <div className="text-[10px] text-muted-foreground font-medium">Quick tasks · Vision</div>
           </div>
         </div>
