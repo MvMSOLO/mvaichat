@@ -12,7 +12,8 @@ const NotFound = () => {
   return (
     <div className="min-h-screen relative grid place-items-center p-6 overflow-hidden">
       <div className="fixed inset-0 mesh-bg pointer-events-none" />
-      <div className="fixed inset-0 nebula-bg pointer-events-none opacity-50" />
+      <div className="fixed inset-0 aurora-bg pointer-events-none opacity-50" />
+      <div className="fixed inset-0 dot-grid-fade pointer-events-none opacity-30" />
 
       <motion.div
         initial={{ opacity: 0, y: 30, scale: 0.95 }}
@@ -23,7 +24,7 @@ const NotFound = () => {
         <div className="grid place-items-center">
           <Ozing mood="confused" size={160} />
         </div>
-        <h1 className="font-display font-black text-7xl md:text-8xl tracking-tighter mt-4">
+        <h1 className="font-display text-7xl md:text-8xl tracking-tighter mt-4">
           <span className="text-gradient">404</span>
         </h1>
         <p className="font-serif italic text-2xl mt-2">Ozing got lost.</p>

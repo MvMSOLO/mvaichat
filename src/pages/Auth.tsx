@@ -68,7 +68,8 @@ export default function Auth() {
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4">
       {/* Animated background */}
       <div className="fixed inset-0 mesh-bg pointer-events-none" />
-      <div className="fixed inset-0 nebula-bg pointer-events-none opacity-70" />
+      <div className="fixed inset-0 aurora-bg pointer-events-none opacity-70" />
+      <div className="fixed inset-0 dot-grid-fade pointer-events-none opacity-40" />
       <motion.div
         className="fixed top-1/4 -right-40 w-[36rem] h-[36rem] rounded-full bg-primary/20 blur-3xl pointer-events-none"
         animate={{ scale: [1, 1.15, 1], rotate: [0, 90, 0] }}
@@ -100,7 +101,7 @@ export default function Auth() {
             />
             <Ozing mood={mood} size={260} followCursor />
           </div>
-          <h2 className="mt-6 font-display text-3xl font-black tracking-tighter">
+          <h2 className="mt-6 font-display text-3xl tracking-tighter">
             <span className="font-serif italic text-primary">Hi</span>, I'm Ozing.
           </h2>
           <p className="mt-2 text-sm text-muted-foreground max-w-xs">
@@ -129,7 +130,7 @@ export default function Auth() {
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.3 }}
               >
-                <h1 className="text-3xl md:text-4xl font-display font-black tracking-tighter">
+                <h1 className="text-3xl md:text-4xl font-display tracking-tighter">
                   {mode === "signup" ? <>Make an <span className="font-serif italic text-primary">account</span></> :
                    mode === "forgot" ? <>Reset your <span className="font-serif italic text-primary">password</span></> :
                    <>Welcome <span className="font-serif italic text-primary">back</span></>}
