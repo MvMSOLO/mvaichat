@@ -8,6 +8,7 @@ import { MODELS, MODEL_LIST, ModelId } from "@/lib/models";
 import { Ozing, OzingMood } from "@/components/Ozing";
 import { MessageContent } from "@/components/MessageContent";
 import { Panel } from "@/components/Panel";
+import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -173,7 +174,7 @@ export default function Chat() {
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-border/60">
         <div className="flex items-center gap-2 mb-4">
-          <div className="size-8 rounded-xl bg-ink grid place-items-center text-ink-foreground font-display text-sm">M</div>
+          <BrandMark size={32} />
           <span className="font-display text-lg tracking-tight">MV AI</span>
         </div>
         <Button onClick={newChat} className="w-full rounded-xl bg-ink text-ink-foreground hover:bg-ink/90 h-10 font-semibold shine">
