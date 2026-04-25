@@ -68,7 +68,8 @@ export default function Auth() {
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4">
       {/* Animated background */}
       <div className="fixed inset-0 mesh-bg pointer-events-none" />
-      <div className="fixed inset-0 nebula-bg pointer-events-none opacity-70" />
+      <div className="fixed inset-0 aurora-bg pointer-events-none opacity-70" />
+      <div className="fixed inset-0 dot-grid-fade pointer-events-none opacity-40" />
       <motion.div
         className="fixed top-1/4 -right-40 w-[36rem] h-[36rem] rounded-full bg-primary/20 blur-3xl pointer-events-none"
         animate={{ scale: [1, 1.15, 1], rotate: [0, 90, 0] }}

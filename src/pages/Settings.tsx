@@ -47,7 +47,8 @@ export default function Settings() {
   return (
     <div className="min-h-screen relative overflow-hidden">
       <div className="fixed inset-0 mesh-bg pointer-events-none" />
-      <div className="fixed inset-0 nebula-bg opacity-40 pointer-events-none" />
+      <div className="fixed inset-0 aurora-bg opacity-40 pointer-events-none" />
+      <div className="fixed inset-0 dot-grid-fade pointer-events-none opacity-30" />
       <div className="relative z-10 container max-w-3xl py-8">
         <div className="flex items-center justify-between mb-8">
           <Link to="/chat"><Button variant="ghost" size="sm" className="glass rounded-full"><ArrowLeft className="size-4 mr-1" /> Chat</Button></Link>
