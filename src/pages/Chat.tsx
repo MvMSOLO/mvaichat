@@ -410,6 +410,8 @@ function EmptyState({ model, onPick, mood }: { model: typeof MODELS[ModelId]; on
     vision: ["Describe an attached image", "Extract text from a screenshot", "Identify UI components"],
     search: ["Recent news on AI safety", "Best practices for indie launches", "What's trending in design?"],
     voice: ["Tell me a fun fact", "How's the weather described?", "Quick stretch routine for desks"],
+    agents: ["Plan a product launch", "Research + write a poem about Tashkent", "Brainstorm an app idea end-to-end"],
+    social: ["Open @mrbeast on YouTube", "https://instagram.com/zendaya", "tiktok.com/@khaby.lame"],
   };
   return (
     <motion.div
