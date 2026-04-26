@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.title-conversation]
 verify_jwt = false
+
+[functions.multi-agent]
+verify_jwt = false
+
+[functions.social-lookup]
+verify_jwt = false
