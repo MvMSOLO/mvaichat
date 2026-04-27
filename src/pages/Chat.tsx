@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useChatStream, generateTitle, ChatMsg } from "@/hooks/useChatStream";
 import { MODELS, MODEL_LIST, ModelId } from "@/lib/models";
 import { Ozing, OzingMood } from "@/components/Ozing";
+import { Ozing3D, Ozing3DMood } from "@/components/Ozing3D";
 import { MessageContent } from "@/components/MessageContent";
 import { Panel } from "@/components/Panel";
 import { BrandMark } from "@/components/BrandMark";
@@ -413,22 +414,28 @@ function EmptyState({ model, onPick, mood }: { model: typeof MODELS[ModelId]; on
     agents: ["Plan a product launch", "Research + write a poem about Tashkent", "Brainstorm an app idea end-to-end"],
     social: ["Open @mrbeast on YouTube", "https://instagram.com/zendaya", "tiktok.com/@khaby.lame"],
   };
+
+  // Map old mood → new 3D mood
+  const mood3D: Ozing3DMood =
+    mood === "thinking" || mood === "loading" ? "think"
+    : mood === "happy" || mood === "celebrate" || mood === "love" || mood === "success" ? "happy"
+    : mood === "listening" || mood === "speaking" ? "focus"
+    : mood === "curious" || mood === "awe" || mood === "magic" ? "curious"
+    : "idle";
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto"
+      className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto px-4"
     >
-      <div className="relative">
-        <div className="absolute inset-0 rounded-full blur-3xl scale-110" style={{ background: `radial-gradient(circle, hsl(${model.gem} / 0.3), transparent 60%)` }} />
-        <Ozing mood={mood} size={160} gemColor={`hsl(${model.gem})`} followCursor />
-      </div>
-      <h2 className="font-display text-4xl md:text-5xl tracking-tighter mt-4">
+      <Ozing3D mood={mood3D} size={220} followCursor glow />
+      <h2 className="font-display text-4xl md:text-5xl tracking-tighter mt-2">
         Hi from <span className="font-serif italic" style={{ color: `hsl(${model.gem})` }}>{model.name}</span>
       </h2>
-      <p className="text-muted-foreground mt-2 max-w-md">{model.tagline}</p>
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+      <p className="text-foreground/60 mt-2 max-w-md">{model.tagline}</p>
+      <div className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
         {suggestions[model.id].map((s, i) => (
           <motion.button
             key={i}
@@ -438,7 +445,7 @@ function EmptyState({ model, onPick, mood }: { model: typeof MODELS[ModelId]; on
             whileHover={{ y: -3, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => onPick(s)}
-            className="glass rounded-2xl p-3 text-sm text-left hover:bg-muted/40 transition-colors border border-border/40"
+            className="glass-strong rounded-2xl p-3 text-sm text-left hover:border-primary/30 transition-colors border border-foreground/10"
           >
             {s}
           </motion.button>
