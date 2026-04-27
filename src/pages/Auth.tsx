@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Ozing, OzingMood } from "@/components/Ozing";
+import { Ozing3D, Ozing3DMood } from "@/components/Ozing3D";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,18 +95,24 @@ export default function Auth() {
           className="hidden md:flex flex-col items-center text-center"
         >
           <div className="relative">
-            <motion.div
-              className="absolute inset-0 rounded-full bg-gradient-to-tr from-primary/30 via-tertiary/30 to-secondary/30 blur-3xl scale-125"
-              animate={{ scale: [1.2, 1.4, 1.2] }}
-              transition={{ duration: 4, repeat: Infinity }}
+            <Ozing3D
+              mood={
+                mood === "thinking" ? "think"
+                : mood === "love" || mood === "celebrate" || mood === "happy" ? "happy"
+                : mood === "shy" || mood === "peek" ? "focus"
+                : mood === "curious" ? "curious"
+                : "idle"
+              }
+              size={300}
+              followCursor
+              glow
             />
-            <Ozing mood={mood} size={260} followCursor />
           </div>
           <h2 className="mt-6 font-display text-3xl tracking-tighter">
-            <span className="font-serif italic text-primary">Hi</span>, I'm Ozing.
+            <span className="font-serif italic text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-violet-400">Hi</span>, I'm Ozing.
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground max-w-xs">
-            Your AI companion. I react to everything you do — even your password.
+          <p className="mt-2 text-sm text-foreground/60 max-w-xs">
+            Your AI companion. I react to everything — even your password.
           </p>
         </motion.div>
 
@@ -118,7 +125,7 @@ export default function Auth() {
         >
           {/* Mobile only Ozing */}
           <div className="md:hidden flex justify-center mb-4">
-            <Ozing mood={mood} size={120} />
+            <Ozing3D mood={mood === "shy" ? "focus" : "idle"} size={140} glow />
           </div>
 
           <div className="glass-strong rounded-3xl p-7 md:p-8 shadow-elev">

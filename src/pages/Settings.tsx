@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Ozing } from "@/components/Ozing";
+import { Ozing3D } from "@/components/Ozing3D";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,16 +62,17 @@ export default function Settings() {
           transition={{ duration: 0.5 }}
           className="glass-strong rounded-[2rem] p-7 md:p-10 shadow-elev"
         >
-          <div className="flex items-center gap-5 mb-8 pb-6 border-b border-border/60">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-primary/30 blur-2xl" />
-              <Ozing mood={moodForPersonality as any} size={100} />
-            </div>
+          <div className="flex items-center gap-5 mb-8 pb-6 border-b border-foreground/10">
+            <Ozing3D
+              mood={personality === "playful" ? "happy" : personality === "calm" ? "idle" : "think"}
+              size={120}
+              glow
+            />
             <div>
               <h1 className="font-display text-3xl tracking-tighter">
-                <span className="font-serif italic text-primary">Hello,</span> {name || "you"}
+                <span className="font-serif italic text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-violet-400">Hello,</span> {name || "you"}
               </h1>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <p className="text-sm text-foreground/60">{user?.email}</p>
             </div>
           </div>
 
