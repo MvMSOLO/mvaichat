@@ -113,24 +113,22 @@ Deno.serve(async (req) => {
       try {
         send("start", { agents: AGENTS.map((a) => ({ id: a.id, name: a.name, emoji: a.emoji, role: a.role })) });
 
-        // Step 1: Researcher
+        // Steps 1+2: Researcher and Strategist run in PARALLEL
         send("agent_start", { id: "researcher" });
-        const research = await callAgent(
-          AGENTS[0].model,
-          AGENTS[0].system,
-          `User request: """${userPrompt}"""${historyText}`,
-          apiKey,
-        );
-        send("agent_message", { id: "researcher", content: research });
-
-        // Step 2: Planner
         send("agent_start", { id: "planner" });
-        const plan = await callAgent(
-          AGENTS[1].model,
-          AGENTS[1].system,
-          `User request: """${userPrompt}"""\n\nResearcher notes:\n${research}`,
-          apiKey,
-        );
+        const [research, plan] = await Promise.all([
+          callAgent(
+            AGENTS[0].model, AGENTS[0].system,
+            `User request: """${userPrompt}"""${historyText}`,
+            apiKey,
+          ),
+          callAgent(
+            AGENTS[1].model, AGENTS[1].system,
+            `User request: """${userPrompt}"""${historyText}\n\n(Plan independently — research will arrive in parallel.)`,
+            apiKey,
+          ),
+        ]);
+        send("agent_message", { id: "researcher", content: research });
         send("agent_message", { id: "planner", content: plan });
 
         // Step 3: Creator
