@@ -81,7 +81,7 @@ export default function Landing() {
             <a href="#modes" className="hover:text-foreground transition">Modes</a>
             <a href="#agents" className="hover:text-foreground transition">Agents</a>
             <a href="#vision" className="hover:text-foreground transition">Vision</a>
-            <a href="#social" className="hover:text-foreground transition">Social</a>
+            <Link to="/studio" className="hover:text-foreground transition">Studio</Link>
           </nav>
           <div className="flex items-center gap-1.5">
             <Link to="/auth" className="hidden sm:inline-flex">
