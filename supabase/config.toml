@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.social-lookup]
 verify_jwt = false
+
+[functions.web-search]
+verify_jwt = false
+
+[functions.logo-engine]
+verify_jwt = false

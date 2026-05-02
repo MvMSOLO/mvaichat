@@ -5,12 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Ozing } from "@/components/Ozing";
 import { Ozing3D } from "@/components/Ozing3D";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { ArrowLeft, LogOut, Loader2, User, Sparkles, Volume2, Mic } from "lucide-react";
+import { ArrowLeft, LogOut, Loader2, User, Sparkles, Volume2, Mic, Smartphone } from "lucide-react";
 
 export default function Settings() {
   const { user, signOut } = useAuth();
@@ -106,6 +107,14 @@ export default function Settings() {
           <Button onClick={save} disabled={saving} className="rounded-xl mt-8 bg-ink text-ink-foreground hover:bg-ink/90 h-11 px-6 font-semibold shine">
             {saving && <Loader2 className="size-4 animate-spin" />} Save changes
           </Button>
+
+          <div className="mt-10 pt-6 border-t border-foreground/10">
+            <div className="flex items-center gap-2 mb-4">
+              <Smartphone className="size-4 text-cyan-300" />
+              <h2 className="font-display font-bold text-lg tracking-tight">Native app</h2>
+            </div>
+            <InstallPrompt />
+          </div>
         </motion.div>
       </div>
     </div>

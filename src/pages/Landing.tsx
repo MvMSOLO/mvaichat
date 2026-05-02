@@ -11,6 +11,8 @@ import {
 import { TiltCard } from "@/components/TiltCard";
 import { Magnetic } from "@/components/MagneticCursor";
 import { BrandMark } from "@/components/BrandMark";
+import { Slogan } from "@/components/Slogan";
+import { SecretSignature } from "@/components/SecretSignature";
 import { useReducedMotion, useIsMobile } from "@/hooks/useMotionPrefs";
 import heroOrb from "@/assets/hero-orb-premium.png";
 
@@ -79,7 +81,7 @@ export default function Landing() {
             <a href="#modes" className="hover:text-foreground transition">Modes</a>
             <a href="#agents" className="hover:text-foreground transition">Agents</a>
             <a href="#vision" className="hover:text-foreground transition">Vision</a>
-            <a href="#social" className="hover:text-foreground transition">Social</a>
+            <Link to="/studio" className="hover:text-foreground transition">Studio</Link>
           </nav>
           <div className="flex items-center gap-1.5">
             <Link to="/auth" className="hidden sm:inline-flex">
@@ -160,6 +162,15 @@ export default function Landing() {
             Six AI minds. Four cooperating agents. One cinematic interface — built around{" "}
             <strong className="text-foreground">Ozing</strong>, your premium AI companion.
           </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.85, duration: 0.7 }}
+            className="mt-6"
+          >
+            <Slogan />
+          </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -682,6 +693,9 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
+      {/* ============ SECRET SIGNATURE — only on landing, after footer ============ */}
+      <SecretSignature />
     </div>
   );
 }

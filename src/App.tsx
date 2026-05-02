@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Chat from "./pages/Chat";
 import Settings from "./pages/Settings";
+import Studio from "./pages/Studio";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ const App = () => {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/chat" element={<Protected><Chat /></Protected>} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
+            <Route path="/studio" element={<Studio />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
