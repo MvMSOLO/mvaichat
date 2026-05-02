@@ -11,6 +11,8 @@ import {
 import { TiltCard } from "@/components/TiltCard";
 import { Magnetic } from "@/components/MagneticCursor";
 import { BrandMark } from "@/components/BrandMark";
+import { Slogan } from "@/components/Slogan";
+import { SecretSignature } from "@/components/SecretSignature";
 import { useReducedMotion, useIsMobile } from "@/hooks/useMotionPrefs";
 import heroOrb from "@/assets/hero-orb-premium.png";
 
@@ -160,6 +162,15 @@ export default function Landing() {
             Six AI minds. Four cooperating agents. One cinematic interface — built around{" "}
             <strong className="text-foreground">Ozing</strong>, your premium AI companion.
           </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.85, duration: 0.7 }}
+            className="mt-6"
+          >
+            <Slogan />
+          </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -682,6 +693,9 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
+      {/* ============ SECRET SIGNATURE — only on landing, after footer ============ */}
+      <SecretSignature />
     </div>
   );
 }
