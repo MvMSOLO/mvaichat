@@ -45,6 +45,31 @@ Deno.serve(async (req) => {
 
     // Build messages: if attachments, augment last user msg with image parts
     const finalMessages = [...messages];
+
+    // Search mode: fetch live web results and prepend to last user message
+    if (modelId === "search" && finalMessages.length > 0) {
+      const lastUser = finalMessages[finalMessages.length - 1];
+      if (lastUser.role === "user" && typeof lastUser.content === "string") {
+        try {
+          const supaUrl = Deno.env.get("SUPABASE_URL");
+          const r = await fetch(`${supaUrl}/functions/v1/web-search`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}` },
+            body: JSON.stringify({ query: lastUser.content }),
+          });
+          const j = await r.json();
+          if (j?.results?.length) {
+            const ctx = j.results.map((x: any, i: number) => `[${i + 1}] ${x.title} — ${x.source}\n${x.snippet}\n${x.url}`).join("\n\n");
+            const sourcesJSON = JSON.stringify({
+              type: "links",
+              items: j.results.map((x: any) => ({ url: x.url, title: x.title, description: x.snippet, source: x.source })),
+            });
+            lastUser.content = `${lastUser.content}\n\n[Live web results — synthesize and cite by number; end your reply with this exact mvai sources block:\n\n\`\`\`mvai\n${sourcesJSON}\n\`\`\`\n\nResults:\n${ctx}]`;
+          }
+        } catch (e) { console.error("search aug fail", e); }
+      }
+    }
+
     if (attachments && attachments.length > 0 && finalMessages.length > 0) {
       const last = finalMessages[finalMessages.length - 1];
       if (last.role === "user") {
