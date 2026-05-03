@@ -14,10 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
-      conversations: {
+      code_runs: {
         Row: {
           created_at: string
+          error: string | null
           id: string
+          language: string | null
+          ok: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          language?: string | null
+          ok: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          language?: string | null
+          ok?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
+      conversations: {
+        Row: {
+          branched_from: string | null
+          created_at: string
+          id: string
+          mode: string | null
           model_id: string
           pinned: boolean
           title: string
@@ -25,8 +54,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          branched_from?: string | null
           created_at?: string
           id?: string
+          mode?: string | null
           model_id?: string
           pinned?: boolean
           title?: string
@@ -34,13 +65,42 @@ export type Database = {
           user_id: string
         }
         Update: {
+          branched_from?: string | null
           created_at?: string
           id?: string
+          mode?: string | null
           model_id?: string
           pinned?: boolean
           title?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      error_logs: {
+        Row: {
+          created_at: string
+          error: string
+          fn: string
+          id: string
+          payload: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error: string
+          fn: string
+          id?: string
+          payload?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error?: string
+          fn?: string
+          id?: string
+          payload?: Json | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -112,6 +172,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_memories: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          updated_at: string
+          user_id: string
+          value: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          updated_at?: string
+          user_id: string
+          value: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          user_id?: string
+          value?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -129,6 +219,36 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_secrets: {
+        Row: {
+          created_at: string
+          id: string
+          meta: Json | null
+          provider: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          provider: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          provider?: string
+          token?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

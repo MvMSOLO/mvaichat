@@ -17,3 +17,12 @@ verify_jwt = false
 
 [functions.logo-engine]
 verify_jwt = false
+
+[functions.tools-executor]
+verify_jwt = false
+
+[functions.image-studio]
+verify_jwt = false
+
+[functions.pdf-gen]
+verify_jwt = false
