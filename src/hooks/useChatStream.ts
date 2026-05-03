@@ -20,7 +20,8 @@ export function useChatStream() {
       messages: ChatMsg[],
       modelId: ModelId,
       onDelta: (chunk: string) => void,
-      attachments?: string[]
+      attachments?: string[],
+      memories?: Array<{ key: string; value: string }>,
     ) => {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -34,7 +35,7 @@ export function useChatStream() {
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           signal: ctrl.signal,
-          body: JSON.stringify({ messages, modelId, attachments }),
+          body: JSON.stringify({ messages, modelId, attachments, memories }),
         });
 
         if (resp.status === 429) {
