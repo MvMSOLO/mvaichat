@@ -44,6 +44,7 @@ export default function Chat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { send, stop, streaming } = useChatStream();
+  const { memories, autoExtract } = useMemory(user?.id);
 
   const loadConversations = useCallback(async () => {
     if (!user) return;
