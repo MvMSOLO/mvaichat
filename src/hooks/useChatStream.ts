@@ -22,6 +22,7 @@ export function useChatStream() {
       onDelta: (chunk: string) => void,
       attachments?: string[],
       memories?: Array<{ key: string; value: string }>,
+      onToolCalls?: (calls: Array<{ name: string; args: any }>) => void,
     ) => {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
