@@ -10,6 +10,12 @@ import { Ozing3D, Ozing3DMood } from "@/components/Ozing3D";
 import { MessageContent } from "@/components/MessageContent";
 import { Panel } from "@/components/Panel";
 import { BrandMark } from "@/components/BrandMark";
+import { SmoothStream } from "@/components/SmoothStream";
+import { SlashMenu, SLASH } from "@/components/SlashMenu";
+import { ModeShell } from "@/components/ModeShell";
+import { useMemory } from "@/hooks/useMemory";
+import { runSlash } from "@/lib/slashHandlers";
+import { runToolCalls } from "@/lib/autonomy";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -38,6 +44,7 @@ export default function Chat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { send, stop, streaming } = useChatStream();
+  const { memories, autoExtract } = useMemory(user?.id);
 
   const loadConversations = useCallback(async () => {
     if (!user) return;
@@ -88,12 +95,31 @@ export default function Chat() {
     setMessages([...baseMessages, { role: "assistant", content: "" }]);
 
     await supabase.from("messages").insert({ conversation_id: convId, user_id: user.id, role: "user", content: text, attachments });
+    autoExtract(text).catch(() => {});
 
     if (isNew) {
       generateTitle(text).then(async (title) => {
         await supabase.from("conversations").update({ title }).eq("id", convId!);
         loadConversations();
       });
+    }
+
+    // Slash command short-circuit
+    if (text.startsWith("/")) {
+      setMood("thinking");
+      const slashOut = await runSlash(text);
+      if (slashOut !== null) {
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = { role: "assistant", content: slashOut };
+          return next;
+        });
+        await supabase.from("messages").insert({ conversation_id: convId, user_id: user.id, role: "assistant", content: slashOut, model_id: modelId });
+        await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
+        setMood("happy"); setTimeout(() => setMood("idle"), 1500);
+        loadConversations();
+        return;
+      }
     }
 
     let acc = "";
@@ -108,7 +134,22 @@ export default function Chat() {
           return next;
         });
       },
-      attachments.length > 0 ? attachments : undefined
+      attachments.length > 0 ? attachments : undefined,
+      memories,
+      async (calls) => {
+        // Execute tool calls returned by the model
+        if (!calls.length) return;
+        const results = await runToolCalls(calls);
+        const summary = results.map((r) => r.message || (r.ok ? "Done" : `Error: ${r.error || ""}`)).join("\n");
+        if (summary) {
+          acc += (acc ? "\n\n" : "") + `_${summary}_`;
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { role: "assistant", content: acc };
+            return next;
+          });
+        }
+      },
     );
 
     if (acc) {
@@ -282,12 +323,16 @@ export default function Chat() {
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 md:px-6 py-6">
+          <ModeShell mode={modelId}>
           {messages.length === 0 ? (
             <EmptyState model={ActiveModel} onPick={(s) => setInput(s)} mood={mood} />
           ) : (
-            <div className="max-w-3xl mx-auto space-y-5">
+            <div className={`mx-auto space-y-5 ${modelId === "code" ? "max-w-5xl" : modelId === "voice" ? "max-w-xl" : "max-w-3xl"}`}>
               <AnimatePresence initial={false}>
-                {messages.map((m, i) => (
+                {messages.map((m, i) => {
+                  const isLast = i === messages.length - 1;
+                  const isStreamingAssistant = m.role === "assistant" && isLast && streaming;
+                  return (
                   <motion.div
                     key={i}
                     layout
@@ -299,7 +344,7 @@ export default function Chat() {
                     {m.role === "assistant" && (
                       <div className="shrink-0">
                         <div className="size-9 rounded-2xl glass grid place-items-center">
-                          <Ozing mood={streaming && i === messages.length - 1 ? "speaking" : "idle"} size={32} gemColor={`hsl(${ActiveModel.gem})`} />
+                          <Ozing mood={isStreamingAssistant ? "speaking" : "idle"} size={32} gemColor={`hsl(${ActiveModel.gem})`} />
                         </div>
                       </div>
                     )}
@@ -312,21 +357,35 @@ export default function Chat() {
                         </div>
                       )}
                       {m.role === "assistant" ? (
-                        m.content ? <MessageContent content={m.content} /> : <TypingDots />
+                        m.content ? (
+                          isStreamingAssistant
+                            ? <SmoothStream text={m.content} done={false} className="text-sm md:text-base" />
+                            : <MessageContent content={m.content} />
+                        ) : <TypingDots />
                       ) : (
                         <p className="whitespace-pre-wrap text-sm md:text-base">{m.content}</p>
                       )}
                     </div>
                   </motion.div>
-                ))}
+                  );
+                })}
               </AnimatePresence>
             </div>
           )}
+          </ModeShell>
         </div>
 
         {/* Composer */}
         <div className="px-3 md:px-6 pb-4 pt-2">
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto relative">
+            <AnimatePresence>
+              {input.startsWith("/") && !input.includes("\n") && (
+                <SlashMenu
+                  filter={input}
+                  onPick={(c) => setInput(c.insert)}
+                />
+              )}
+            </AnimatePresence>
             <AnimatePresence>
               {pendingAttachments.length > 0 && (
                 <motion.div

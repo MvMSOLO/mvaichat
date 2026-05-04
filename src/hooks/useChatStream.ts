@@ -22,6 +22,7 @@ export function useChatStream() {
       onDelta: (chunk: string) => void,
       attachments?: string[],
       memories?: Array<{ key: string; value: string }>,
+      onToolCalls?: (calls: Array<{ name: string; args: any }>) => void,
     ) => {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -55,6 +56,22 @@ export function useChatStream() {
         const decoder = new TextDecoder();
         let buf = "";
         let done = false;
+        // Tool-call accumulator: index -> { name, args(string) }
+        const toolAcc: Record<number, { name: string; args: string }> = {};
+
+        const handleParsed = (parsed: any) => {
+          const delta = parsed.choices?.[0]?.delta;
+          if (!delta) return;
+          if (delta.content) onDelta(delta.content);
+          if (Array.isArray(delta.tool_calls)) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              if (!toolAcc[idx]) toolAcc[idx] = { name: "", args: "" };
+              if (tc.function?.name) toolAcc[idx].name = tc.function.name;
+              if (tc.function?.arguments) toolAcc[idx].args += tc.function.arguments;
+            }
+          }
+        };
 
         while (!done) {
           const { done: d, value } = await reader.read();
@@ -70,11 +87,7 @@ export function useChatStream() {
             if (!line.startsWith("data: ")) continue;
             const json = line.slice(6).trim();
             if (json === "[DONE]") { done = true; break; }
-            try {
-              const parsed = JSON.parse(json);
-              const c = parsed.choices?.[0]?.delta?.content;
-              if (c) onDelta(c);
-            } catch {
+            try { handleParsed(JSON.parse(json)); } catch {
               buf = line + "\n" + buf;
               break;
             }
@@ -86,13 +99,15 @@ export function useChatStream() {
             if (!raw.startsWith("data: ")) continue;
             const json = raw.slice(6).trim();
             if (json === "[DONE]") continue;
-            try {
-              const p = JSON.parse(json);
-              const c = p.choices?.[0]?.delta?.content;
-              if (c) onDelta(c);
-            } catch { /* skip */ }
+            try { handleParsed(JSON.parse(json)); } catch { /* skip */ }
           }
         }
+
+        // Flush tool calls
+        const calls = Object.values(toolAcc)
+          .filter((c) => c.name)
+          .map((c) => { let args: any = {}; try { args = JSON.parse(c.args || "{}"); } catch {} return { name: c.name, args }; });
+        if (calls.length && onToolCalls) onToolCalls(calls);
       } catch (e: any) {
         if (e.name !== "AbortError") {
           console.error(e);
