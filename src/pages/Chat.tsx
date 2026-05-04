@@ -377,7 +377,15 @@ export default function Chat() {
 
         {/* Composer */}
         <div className="px-3 md:px-6 pb-4 pt-2">
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto relative">
+            <AnimatePresence>
+              {input.startsWith("/") && !input.includes("\n") && (
+                <SlashMenu
+                  filter={input}
+                  onPick={(c) => setInput(c.insert)}
+                />
+              )}
+            </AnimatePresence>
             <AnimatePresence>
               {pendingAttachments.length > 0 && (
                 <motion.div
