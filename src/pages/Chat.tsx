@@ -95,12 +95,31 @@ export default function Chat() {
     setMessages([...baseMessages, { role: "assistant", content: "" }]);
 
     await supabase.from("messages").insert({ conversation_id: convId, user_id: user.id, role: "user", content: text, attachments });
+    autoExtract(text).catch(() => {});
 
     if (isNew) {
       generateTitle(text).then(async (title) => {
         await supabase.from("conversations").update({ title }).eq("id", convId!);
         loadConversations();
       });
+    }
+
+    // Slash command short-circuit
+    if (text.startsWith("/")) {
+      setMood("thinking");
+      const slashOut = await runSlash(text);
+      if (slashOut !== null) {
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = { role: "assistant", content: slashOut };
+          return next;
+        });
+        await supabase.from("messages").insert({ conversation_id: convId, user_id: user.id, role: "assistant", content: slashOut, model_id: modelId });
+        await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
+        setMood("happy"); setTimeout(() => setMood("idle"), 1500);
+        loadConversations();
+        return;
+      }
     }
 
     let acc = "";
@@ -115,7 +134,22 @@ export default function Chat() {
           return next;
         });
       },
-      attachments.length > 0 ? attachments : undefined
+      attachments.length > 0 ? attachments : undefined,
+      memories,
+      async (calls) => {
+        // Execute tool calls returned by the model
+        if (!calls.length) return;
+        const results = await runToolCalls(calls);
+        const summary = results.map((r) => r.message || (r.ok ? "Done" : `Error: ${r.error || ""}`)).join("\n");
+        if (summary) {
+          acc += (acc ? "\n\n" : "") + `_${summary}_`;
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { role: "assistant", content: acc };
+            return next;
+          });
+        }
+      },
     );
 
     if (acc) {
