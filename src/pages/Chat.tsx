@@ -323,12 +323,16 @@ export default function Chat() {
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 md:px-6 py-6">
+          <ModeShell mode={modelId}>
           {messages.length === 0 ? (
             <EmptyState model={ActiveModel} onPick={(s) => setInput(s)} mood={mood} />
           ) : (
-            <div className="max-w-3xl mx-auto space-y-5">
+            <div className={`mx-auto space-y-5 ${modelId === "code" ? "max-w-5xl" : modelId === "voice" ? "max-w-xl" : "max-w-3xl"}`}>
               <AnimatePresence initial={false}>
-                {messages.map((m, i) => (
+                {messages.map((m, i) => {
+                  const isLast = i === messages.length - 1;
+                  const isStreamingAssistant = m.role === "assistant" && isLast && streaming;
+                  return (
                   <motion.div
                     key={i}
                     layout
@@ -340,7 +344,7 @@ export default function Chat() {
                     {m.role === "assistant" && (
                       <div className="shrink-0">
                         <div className="size-9 rounded-2xl glass grid place-items-center">
-                          <Ozing mood={streaming && i === messages.length - 1 ? "speaking" : "idle"} size={32} gemColor={`hsl(${ActiveModel.gem})`} />
+                          <Ozing mood={isStreamingAssistant ? "speaking" : "idle"} size={32} gemColor={`hsl(${ActiveModel.gem})`} />
                         </div>
                       </div>
                     )}
@@ -353,16 +357,22 @@ export default function Chat() {
                         </div>
                       )}
                       {m.role === "assistant" ? (
-                        m.content ? <MessageContent content={m.content} /> : <TypingDots />
+                        m.content ? (
+                          isStreamingAssistant
+                            ? <SmoothStream text={m.content} done={false} className="text-sm md:text-base" />
+                            : <MessageContent content={m.content} />
+                        ) : <TypingDots />
                       ) : (
                         <p className="whitespace-pre-wrap text-sm md:text-base">{m.content}</p>
                       )}
                     </div>
                   </motion.div>
-                ))}
+                  );
+                })}
               </AnimatePresence>
             </div>
           )}
+          </ModeShell>
         </div>
 
         {/* Composer */}
