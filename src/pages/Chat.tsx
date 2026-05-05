@@ -360,11 +360,9 @@ export default function Chat() {
                         </div>
                       )}
                       {m.role === "assistant" ? (
-                        m.content ? (
-                          isStreamingAssistant
-                            ? <SmoothStream text={m.content} done={false} className="text-sm md:text-base" />
-                            : <MessageContent content={m.content} />
-                        ) : <TypingDots />
+                        m.content
+                          ? <MessageContent content={m.content} />
+                          : <TypingDots />
                       ) : (
                         <p className="whitespace-pre-wrap text-sm md:text-base">{m.content}</p>
                       )}
