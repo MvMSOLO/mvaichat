@@ -255,8 +255,15 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          animation_speed: string
           created_at: string
           default_model: string
+          demo_mode: boolean
+          language: string
+          permissions: Json
+          persona: string
+          response_length: string
+          response_style: string
           sound_enabled: boolean
           theme_accent: string
           updated_at: string
@@ -265,8 +272,15 @@ export type Database = {
           voice_name: string | null
         }
         Insert: {
+          animation_speed?: string
           created_at?: string
           default_model?: string
+          demo_mode?: boolean
+          language?: string
+          permissions?: Json
+          persona?: string
+          response_length?: string
+          response_style?: string
           sound_enabled?: boolean
           theme_accent?: string
           updated_at?: string
@@ -275,8 +289,15 @@ export type Database = {
           voice_name?: string | null
         }
         Update: {
+          animation_speed?: string
           created_at?: string
           default_model?: string
+          demo_mode?: boolean
+          language?: string
+          permissions?: Json
+          persona?: string
+          response_length?: string
+          response_style?: string
           sound_enabled?: boolean
           theme_accent?: string
           updated_at?: string

@@ -15,6 +15,7 @@ import { SlashMenu, SLASH } from "@/components/SlashMenu";
 import { ModeShell } from "@/components/ModeShell";
 import { useMemory } from "@/hooks/useMemory";
 import { runSlash } from "@/lib/slashHandlers";
+import { useSettings } from "@/hooks/useSettings";
 import { runToolCalls } from "@/lib/autonomy";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -45,6 +46,7 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { send, stop, streaming } = useChatStream();
   const { memories, autoExtract } = useMemory(user?.id);
+  const { settings } = useSettings(user?.id);
 
   const loadConversations = useCallback(async () => {
     if (!user) return;
@@ -150,6 +152,7 @@ export default function Chat() {
           });
         }
       },
+      settings,
     );
 
     if (acc) {
@@ -357,11 +360,9 @@ export default function Chat() {
                         </div>
                       )}
                       {m.role === "assistant" ? (
-                        m.content ? (
-                          isStreamingAssistant
-                            ? <SmoothStream text={m.content} done={false} className="text-sm md:text-base" />
-                            : <MessageContent content={m.content} />
-                        ) : <TypingDots />
+                        m.content
+                          ? <MessageContent content={m.content} />
+                          : <TypingDots />
                       ) : (
                         <p className="whitespace-pre-wrap text-sm md:text-base">{m.content}</p>
                       )}

@@ -23,6 +23,7 @@ export function useChatStream() {
       attachments?: string[],
       memories?: Array<{ key: string; value: string }>,
       onToolCalls?: (calls: Array<{ name: string; args: any }>) => void,
+      settings?: Record<string, any>,
     ) => {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -36,7 +37,7 @@ export function useChatStream() {
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           signal: ctrl.signal,
-          body: JSON.stringify({ messages, modelId, attachments, memories }),
+          body: JSON.stringify({ messages, modelId, attachments, memories, settings }),
         });
 
         if (resp.status === 429) {
