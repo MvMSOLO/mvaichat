@@ -1,5 +1,4 @@
-// MV AI v6 — Slash command runners. Returns a markdown string to inject as
-// the assistant message, or null if it should fall through to LLM.
+// MV AI v6.5 — Slash command runners.
 import { supabase } from "@/integrations/supabase/client";
 import { runToolCalls } from "@/lib/autonomy";
 
@@ -23,19 +22,52 @@ export async function runSlash(text: string): Promise<string | null> {
       return `**${data.title || "Document"}.pdf** ready.\n\n[📄 Download PDF](${data.dataUrl})`;
     }
     case "open": {
-      if (!arg) return "Usage: `/open <url|app name>`";
-      // URL?
+      if (!arg) return "Usage: `/open <url|app name> [query]`";
       if (/^https?:\/\//i.test(arg)) {
         await runToolCalls([{ name: "open_url", args: { url: arg } }]);
         return `Opening ${arg}`;
       }
-      // app keyword + optional query
       const [app, ...rest] = arg.split(/\s+/);
       await runToolCalls([{ name: "open_app", args: { app: app.toLowerCase(), query: rest.join(" ") } }]);
       return `Opening ${app}${rest.length ? `: ${rest.join(" ")}` : ""}`;
     }
+    case "call": {
+      if (!arg) return "Usage: `/call <phone number>`";
+      const [r] = await runToolCalls([{ name: "call_contact", args: { number: arg } }]);
+      return r?.message || "Call prepared";
+    }
+    case "sms": {
+      // /sms +998... | message text
+      const [num, ...rest] = arg.split("|").map((s) => s.trim());
+      if (!num || !rest.length) return "Usage: `/sms +998901234567 | your message`";
+      const [r] = await runToolCalls([{ name: "send_sms", args: { number: num, text: rest.join("|") } }]);
+      return r?.message || "SMS prepared";
+    }
+    case "dm": {
+      // /dm <ig|tg> @user | message
+      const [head, ...msg] = arg.split("|").map((s) => s.trim());
+      const [platRaw, target] = head.split(/\s+/);
+      const plat = (platRaw || "").toLowerCase();
+      if (!target || !["ig", "instagram", "tg", "telegram"].includes(plat)) return "Usage: `/dm ig|tg @user | message`";
+      const tool = plat.startsWith("t") ? "telegram_action" : "instagram_action";
+      const [r] = await runToolCalls([{ name: tool, args: { kind: "dm", target, text: msg.join("|") } }]);
+      return r?.message || "DM prepared";
+    }
+    case "follow": {
+      // /follow <ig|yt|tg> @user
+      const [platRaw, target] = arg.split(/\s+/);
+      const plat = (platRaw || "").toLowerCase();
+      if (!target) return "Usage: `/follow ig|tg|yt @user`";
+      const tool = plat.startsWith("t") ? "telegram_action" : plat.startsWith("y") ? "youtube_action" : "instagram_action";
+      const kind = tool === "youtube_action" ? "subscribe" : "follow";
+      const [r] = await runToolCalls([{ name: tool, args: { kind, target } }]);
+      return r?.message || "Opened";
+    }
+    case "story": {
+      // Story writing — fall through to LLM with cinematic priming.
+      return null;
+    }
     case "github": {
-      // /github owner/repo path/to/file.md\n```\ncontent\n```
       const head = arg.split("\n")[0].trim();
       const body = arg.slice(head.length).trim();
       const [repo, path] = head.split(/\s+/);
@@ -48,10 +80,8 @@ export async function runSlash(text: string): Promise<string | null> {
       const [r] = await runToolCalls([{ name: "figma_create", args: { name: arg, brief: arg } }]);
       return r?.ok ? `Figma opened. Brief: ${arg}` : `Figma failed: ${r?.error || r?.message}`;
     }
-    case "search": {
-      // fall through - chat function auto-routes to web-search
+    case "search":
       return null;
-    }
   }
   return null;
 }
