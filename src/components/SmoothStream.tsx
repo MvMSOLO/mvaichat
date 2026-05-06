@@ -10,7 +10,7 @@ interface Props {
   done?: boolean;
 }
 
-export function SmoothStream({ text, className = "", speed = 140, done }: Props) {
+export function SmoothStream({ text, className = "", speed = 280, done }: Props) {
   const [shown, setShown] = useState(0);
   const raf = useRef<number | null>(null);
   const last = useRef<number>(performance.now());
