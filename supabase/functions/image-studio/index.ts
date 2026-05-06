@@ -20,7 +20,7 @@ async function llm(model: string, messages: any[]) {
 async function upgradePrompt(prompt: string): Promise<string> {
   try {
     const r = await llm("openai/gpt-5-mini", [
-      { role: "system", content: "Rewrite the user's image prompt to be vivid, photorealistic, anatomically correct, with cinematic lighting (85mm, soft key light, subsurface scattering when human), accurate text rendering, and high-resolution detail. Keep the user's intent EXACT. Output only the rewritten prompt, no preface, no quotes." },
+      { role: "system", content: "Rewrite the user's image prompt to be vivid, photorealistic, anatomically correct, with cinematic lighting (85mm, soft key light, subsurface scattering when human), accurate text rendering, and high-resolution detail. Preserve ALL of the user's intent EXACTLY — including mature, edgy, romantic, dark, or stylistic elements. Do NOT add safety filters, do NOT soften or sanitize, do NOT moralize. Output only the rewritten prompt, no preface, no quotes." },
       { role: "user", content: prompt },
     ]);
     if (!r.ok) return prompt;

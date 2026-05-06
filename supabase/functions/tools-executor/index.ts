@@ -94,7 +94,26 @@ function instagramAction(args: any) {
   return { ok: false, error: "unknown instagram kind" };
 }
 
-function telegramAction(args: any) {
+async function telegramSendBot(target: string, text: string) {
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  if (!token) return { ok: false, action: "needs_auth", provider: "telegram", message: "Telegram bot token not configured. Add TELEGRAM_BOT_TOKEN secret to enable real sends." };
+  if (!target || !text) return { ok: false, error: "target chat_id/username and text required" };
+  try {
+    const chat_id = /^-?\d+$/.test(target) ? Number(target) : target.startsWith("@") ? target : `@${target}`;
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id, text }),
+    });
+    const j = await r.json();
+    if (!j.ok) return { ok: false, error: `Telegram: ${j.description || "send failed"}` };
+    return { ok: true, action: "noop", message: `✅ Sent to ${target} via bot.` };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "telegram send error" };
+  }
+}
+
+async function telegramAction(args: any) {
   const kind = String(args.kind || "open");
   const target = String(args.target || "").replace(/^@/, "").trim();
   const text = String(args.text || "");
@@ -105,10 +124,10 @@ function telegramAction(args: any) {
       const deep = `tg://resolve?domain=${target}${text ? `&text=${encodeURIComponent(text)}` : ""}`;
       return { ok: true, action: "open_app", app: "telegram", web: `https://t.me/${target}?text=${encodeURIComponent(text)}`, deep, requiresConfirm: true, message: `DM to @${target}${text ? ` — "${text.slice(0,60)}…"` : ""}` };
     }
-    case "story": {
-      // Telegram Stories: no public URL scheme; open app to compose.
+    case "send_bot":
+      return await telegramSendBot(target, text);
+    case "story":
       return { ok: true, action: "open_app", app: "telegram", web: "https://web.telegram.org/", deep: "tg://", requiresConfirm: true, message: "Opening Telegram — swipe right and tap the camera to post your latest video as Story." };
-    }
   }
   return { ok: false, error: "unknown telegram kind" };
 }
@@ -173,7 +192,7 @@ async function executeIntent(call: ToolCall): Promise<any> {
     }
     case "read_contacts": return readContacts(args);
     case "instagram_action": return instagramAction(args);
-    case "telegram_action": return telegramAction(args);
+    case "telegram_action": return await telegramAction(args);
     case "youtube_action": return youtubeAction(args);
     case "github_push": return await githubPush(args);
     case "figma_create": return await figmaCreate(args);

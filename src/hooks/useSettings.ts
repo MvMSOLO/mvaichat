@@ -9,6 +9,7 @@ export interface UserSettings {
   response_length: string;
   animation_speed: string;
   demo_mode: boolean;
+  adult_mode: boolean;
   permissions: Record<string, boolean>;
   sound_enabled: boolean;
   voice_enabled: boolean;
@@ -21,6 +22,7 @@ const DEFAULTS: UserSettings = {
   response_length: "balanced",
   animation_speed: "normal",
   demo_mode: false,
+  adult_mode: false,
   permissions: { contacts: false, sms: true, call: true, instagram: true, telegram: true, youtube: true, github: true, location: false, camera: false, microphone: true },
   sound_enabled: true,
   voice_enabled: true,
@@ -41,6 +43,7 @@ export function useSettings(userId: string | undefined) {
         response_length: (data as any).response_length || "balanced",
         animation_speed: (data as any).animation_speed || "normal",
         demo_mode: !!(data as any).demo_mode,
+        adult_mode: !!(data as any).adult_mode,
         permissions: (data as any).permissions || DEFAULTS.permissions,
         sound_enabled: data.sound_enabled,
         voice_enabled: data.voice_enabled,
