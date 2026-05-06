@@ -44,7 +44,7 @@ export default function Chat() {
   const recogRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { send, stop, streaming } = useChatStream();
+  const { send, stop, streaming, provider } = useChatStream();
   const { memories, autoExtract } = useMemory(user?.id);
   const { settings } = useSettings(user?.id);
 
@@ -153,6 +153,9 @@ export default function Chat() {
         }
       },
       settings,
+      (p) => {
+        if (p.id !== "lovable") toast.message(`Switched to ${p.label}`, { description: "Primary provider was busy — using a healthy backup." });
+      },
     );
 
     if (acc) {
