@@ -83,14 +83,22 @@ export function useChatStream() {
           buf += decoder.decode(value, { stream: true });
 
           let idx: number;
+          let pendingEvent: string | null = null;
           while ((idx = buf.indexOf("\n")) !== -1) {
             let line = buf.slice(0, idx);
             buf = buf.slice(idx + 1);
             if (line.endsWith("\r")) line = line.slice(0, -1);
-            if (line.startsWith(":") || !line.trim()) continue;
+            if (line.startsWith(":")) continue;
+            if (!line.trim()) { pendingEvent = null; continue; }
+            if (line.startsWith("event: ")) { pendingEvent = line.slice(7).trim(); continue; }
             if (!line.startsWith("data: ")) continue;
             const json = line.slice(6).trim();
             if (json === "[DONE]") { done = true; break; }
+            if (pendingEvent === "provider") {
+              try { const p = JSON.parse(json); setProvider(p); onProvider?.(p); } catch {}
+              pendingEvent = null;
+              continue;
+            }
             try { handleParsed(JSON.parse(json)); } catch {
               buf = line + "\n" + buf;
               break;
