@@ -15,6 +15,8 @@ export function useChatStream() {
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  const [provider, setProvider] = useState<{ id: string; label: string } | null>(null);
+
   const send = useCallback(
     async (
       messages: ChatMsg[],
@@ -24,6 +26,7 @@ export function useChatStream() {
       memories?: Array<{ key: string; value: string }>,
       onToolCalls?: (calls: Array<{ name: string; args: any }>) => void,
       settings?: Record<string, any>,
+      onProvider?: (p: { id: string; label: string }) => void,
     ) => {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
