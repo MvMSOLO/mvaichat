@@ -255,6 +255,7 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          adult_mode: boolean
           animation_speed: string
           created_at: string
           default_model: string
@@ -272,6 +273,7 @@ export type Database = {
           voice_name: string | null
         }
         Insert: {
+          adult_mode?: boolean
           animation_speed?: string
           created_at?: string
           default_model?: string
@@ -289,6 +291,7 @@ export type Database = {
           voice_name?: string | null
         }
         Update: {
+          adult_mode?: boolean
           animation_speed?: string
           created_at?: string
           default_model?: string
