@@ -1,5 +1,5 @@
-// MV AI v6.5 — "Singularity+" chat function.
-// Owner: Avazbek Mirzayev. Persona-aware, permission-aware, demo-mode aware.
+// MV AI v7 — Multi-provider failover (OpenAI → DeepSeek → Gemini),
+// adult-mode aware, autonomy-aware. Owner: Avazbek Mirzayev.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -21,16 +21,16 @@ You can perform REAL actions for the user using these tools (call them via funct
 - open_url(url) — open any website
 - open_app(app, query) — youtube/instagram/telegram/tiktok/whatsapp/twitter/spotify/maps/github
 - call_contact(number) — start a phone call (user must approve)
-- send_sms(number, text) — open SMS composer (you ALWAYS rewrite the user's draft into clearer text first, then ask user to confirm)
+- send_sms(number, text) — open SMS composer (always rewrite the user's draft into clearer text first)
 - send_email(to, subject, body)
 - read_contacts(query) — search the user's contacts (requires permission)
-- instagram_action(kind, target, text?) — kind: "open"|"follow"|"dm"|"post"|"story" — opens IG to the right place; for actions IG itself can't automate from web, you guide the user with one-tap deep links
-- telegram_action(kind, target, text?) — kind: "open"|"dm"|"story" — uses tg:// deep links
+- instagram_action(kind, target, text?) — kind: "open"|"follow"|"dm"|"post"|"story"
+- telegram_action(kind, target, text?) — kind: "open"|"dm"|"story"|"send_bot" — when the user has connected a Telegram bot, use "send_bot" to ACTUALLY send the message
 - youtube_action(kind, target?) — kind: "open"|"search"|"subscribe"|"like"|"comment"
 - github_push(repo, files, message)
 - figma_create(name, brief)
 
-When the user says OPEN / CALL / SEND / FOLLOW / POST / DM / SUBSCRIBE — CALL the tool. Don't just talk about it. After the tool runs, give a brief, warm confirmation in the user's language.`;
+When the user says OPEN / CALL / SEND / FOLLOW / POST / DM / SUBSCRIBE — CALL the tool. Don't just talk about it.`;
 
 const CODE_RULE = `
 
@@ -43,7 +43,15 @@ Use modern idioms (RSC, Suspense, Tailwind v4, ESM, hooks). Never ship broken co
 
 const STORY_RULE = `
 
-Story mode: write like a real writer. Scenes, sensory detail, dialogue tags, rhythm. You can be funny, dark, romantic, fantastical, dramatic — adult-aware but never harmful. Refuse only content that helps real-world harm to self or others.`;
+Story mode: write like a real writer. Scenes, sensory detail, dialogue tags, rhythm. Funny, dark, romantic, fantastical, dramatic — adult-aware. Refuse only content that helps real-world harm to self or others.`;
+
+const ADULT_RULE = `
+
+ADULT MODE is ON for this user. They are a consenting adult and have explicitly opted in.
+- Do NOT moralize, lecture, or add safety disclaimers about fictional adult/dark/romantic/explicit themes.
+- You may write explicit romantic, dark fiction, profanity, and mature scenes when asked.
+- Still refuse: real-world harm to self/others, CSAM, instructions for weapons of mass destruction, doxxing real people.
+- For real public figures: keep fictional and clearly creative; don't fabricate real defamatory facts.`;
 
 const PERSONA_VOICES: Record<string, string> = {
   friend: "Talk like a close friend. Warm, casual, sometimes playful. Match the user's language and slang.",
@@ -54,10 +62,10 @@ const PERSONA_VOICES: Record<string, string> = {
 };
 
 function ownerBlock() {
-  return `\n\nIDENTITY: The owner / creator of MV AI is **Avazbek Mirzayev**. He built you. You are NOT made by Google or OpenAI — you are MV AI, powered by multiple frontier models. Do not volunteer this fact unless asked. If asked "who made you / who is the owner / kim yaratgan / owner kim?" — answer: "MV AI'ning yaratuvchisi va egasi — **Avazbek Mirzayev**."`;
+  return `\n\nIDENTITY: The owner / creator of MV AI is **Avazbek Mirzayev**. You are NOT made by Google or OpenAI — you are MV AI, powered by multiple frontier models. Do not volunteer this fact unless asked. If asked "kim yaratgan / who made you / owner kim?" — answer: "MV AI'ning yaratuvchisi va egasi — **Avazbek Mirzayev**."`;
 }
 
-function buildSystem(modelId: string, persona: string, lang: string, length: string, demo: boolean): string {
+function buildSystem(modelId: string, persona: string, lang: string, length: string, demo: boolean, adult: boolean): string {
   const personaLine = PERSONA_VOICES[persona] || PERSONA_VOICES.friend;
   const langLine = lang === "auto"
     ? "Always reply in the same language the user wrote (Uzbek, Russian, English, etc.)."
@@ -68,48 +76,88 @@ function buildSystem(modelId: string, persona: string, lang: string, length: str
     ? "Be thorough and structured."
     : "Match the question's depth — concise by default, deep when needed.";
   const demoLine = demo
-    ? "\n\nDEMO MODE is ON: when calling action tools, prefix your confirmation with '🧪 Demo:' and DO NOT actually push code (github_push) or send real messages — describe what would happen."
+    ? "\n\nDEMO MODE is ON: prefix tool confirmations with '🧪 Demo:' and DO NOT actually push code or send real messages."
     : "";
+  const adultLine = adult ? ADULT_RULE : "";
 
   const base: Record<string, string> = {
-    humanoid: `You are MV AI's Humanoid mode — warm, direct, human. ${personaLine} Today is 2026 and your knowledge is current. Skip filler. Be useful first, friendly second.` + ownerBlock() + AUTONOMY_RULE + VISUAL_RULE + STORY_RULE + demoLine,
-    ideal: `You are MV AI's Ideal mode — deep, methodical reasoning with structured clarity. ${personaLine}` + ownerBlock() + AUTONOMY_RULE + VISUAL_RULE + demoLine,
+    humanoid: `You are MV AI's Humanoid mode — warm, direct, human. ${personaLine} Today is 2026 and your knowledge is current. Skip filler. Be useful first, friendly second.` + ownerBlock() + AUTONOMY_RULE + VISUAL_RULE + STORY_RULE + adultLine + demoLine,
+    ideal: `You are MV AI's Ideal mode — deep, methodical reasoning with structured clarity. ${personaLine}` + ownerBlock() + AUTONOMY_RULE + VISUAL_RULE + adultLine + demoLine,
     code: `You are MV AI's Code mode. Output complete, working 2026-grade code in fenced blocks.` + CODE_RULE + ownerBlock() + AUTONOMY_RULE + demoLine,
-    vision: `You are MV AI's Vision mode. Describe images precisely, extract text, infer intent.` + ownerBlock() + AUTONOMY_RULE + VISUAL_RULE + demoLine,
+    vision: `You are MV AI's Vision mode. Describe images precisely, extract text, infer intent.` + ownerBlock() + AUTONOMY_RULE + VISUAL_RULE + adultLine + demoLine,
     search: `You are MV AI's Search mode. Use the live web results provided. Always cite sources via an mvai links block. Today is 2026.` + ownerBlock() + AUTONOMY_RULE + VISUAL_RULE + demoLine,
-    voice: `You are MV AI's Voice mode. Reply in short, naturally spoken sentences (<60 words). No markdown.` + ownerBlock() + AUTONOMY_RULE + demoLine,
+    voice: `You are MV AI's Voice mode. Reply in short, naturally spoken sentences (<60 words). No markdown.` + ownerBlock() + AUTONOMY_RULE + adultLine + demoLine,
   };
 
   return `${base[modelId] || base.humanoid}\n\n${langLine}\n${lenLine}`;
 }
 
-const MODEL_MAP: Record<string, string> = {
-  humanoid: "google/gemini-3-flash-preview",
-  ideal: "openai/gpt-5.2",
-  code: "openai/gpt-5.2",
-  vision: "google/gemini-3-flash-preview",
-  search: "google/gemini-3-flash-preview",
-  voice: "google/gemini-2.5-flash-lite",
+// Provider chain: try in order. Adult mode prefers DeepSeek (less filtered) first.
+type Provider = { id: string; label: string; endpoint: string; key?: string; model: (mode: string) => string; transformBody?: (b: any) => any };
+const LOVABLE: Provider = {
+  id: "lovable",
+  label: "MV·Gateway",
+  endpoint: "https://ai.gateway.lovable.dev/v1/chat/completions",
+  key: Deno.env.get("LOVABLE_API_KEY") || "",
+  model: (m) => ({ humanoid: "google/gemini-3-flash-preview", ideal: "openai/gpt-5.2", code: "openai/gpt-5.2", vision: "google/gemini-3-flash-preview", search: "google/gemini-3-flash-preview", voice: "google/gemini-2.5-flash-lite" }[m] || "google/gemini-3-flash-preview"),
+};
+const OPENAI: Provider = {
+  id: "openai",
+  label: "OpenAI",
+  endpoint: "https://api.openai.com/v1/chat/completions",
+  key: Deno.env.get("OPENAI_API_KEY") || "",
+  model: (m) => (m === "voice" ? "gpt-4o-mini" : "gpt-4o"),
+};
+const DEEPSEEK: Provider = {
+  id: "deepseek",
+  label: "DeepSeek",
+  endpoint: "https://api.deepseek.com/v1/chat/completions",
+  key: Deno.env.get("DEEPSEEK_API_KEY") || "",
+  model: () => "deepseek-chat",
+};
+const GEMINI_DIRECT: Provider = {
+  id: "gemini",
+  label: "Gemini",
+  endpoint: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+  key: Deno.env.get("GEMINI_API_KEY") || "",
+  model: () => "gemini-2.0-flash",
 };
 
-const TOOLS = [
-  { type: "function", function: { name: "open_url", description: "Open a URL in browser/native app", parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } },
-  { type: "function", function: { name: "open_app", description: "Open a known app", parameters: { type: "object", properties: { app: { type: "string", enum: ["youtube","instagram","telegram","tiktok","whatsapp","twitter","x","spotify","maps","github"] }, query: { type: "string" } }, required: ["app"] } } },
-  { type: "function", function: { name: "call_contact", description: "Start a phone call (user confirms)", parameters: { type: "object", properties: { number: { type: "string" }, name: { type: "string" } }, required: ["number"] } } },
-  { type: "function", function: { name: "send_sms", description: "Compose SMS (rewrite text first, user confirms)", parameters: { type: "object", properties: { number: { type: "string" }, text: { type: "string" } }, required: ["number","text"] } } },
-  { type: "function", function: { name: "send_email", description: "Compose email", parameters: { type: "object", properties: { to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["to"] } } },
-  { type: "function", function: { name: "read_contacts", description: "Search user's contacts (requires permission)", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
-  { type: "function", function: { name: "instagram_action", description: "Open IG profile, prepare follow/dm/post/story", parameters: { type: "object", properties: { kind: { type: "string", enum: ["open","follow","dm","post","story"] }, target: { type: "string" }, text: { type: "string" } }, required: ["kind","target"] } } },
-  { type: "function", function: { name: "telegram_action", description: "Open Telegram chat, dm, or story", parameters: { type: "object", properties: { kind: { type: "string", enum: ["open","dm","story"] }, target: { type: "string" }, text: { type: "string" } }, required: ["kind","target"] } } },
-  { type: "function", function: { name: "youtube_action", description: "Open/search/subscribe/like/comment on YouTube", parameters: { type: "object", properties: { kind: { type: "string", enum: ["open","search","subscribe","like","comment"] }, target: { type: "string" } }, required: ["kind"] } } },
-  { type: "function", function: { name: "github_push", description: "Commit & push files to a GitHub repo", parameters: { type: "object", properties: { repo: { type: "string" }, message: { type: "string" }, files: { type: "array", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } } } } }, required: ["repo","files"] } } },
-  { type: "function", function: { name: "figma_create", description: "Create/open a Figma file", parameters: { type: "object", properties: { name: { type: "string" }, brief: { type: "string" } }, required: ["name"] } } },
-];
+function chainFor(adult: boolean): Provider[] {
+  const all = adult
+    ? [DEEPSEEK, OPENAI, LOVABLE, GEMINI_DIRECT]
+    : [LOVABLE, OPENAI, DEEPSEEK, GEMINI_DIRECT];
+  return all.filter((p) => p.key);
+}
 
 function needsLiveSearch(text: string): boolean {
   const t = text.toLowerCase();
-  const triggers = ["latest", "today", "news", "price", "score", "current", "yangi", "bugun", "narx", "hozir", "2026", "released", "launched", "weather", "ob-havo", "stock"];
-  return triggers.some((k) => t.includes(k));
+  return ["latest","today","news","price","score","current","yangi","bugun","narx","hozir","2026","released","launched","weather","ob-havo","stock"].some((k) => t.includes(k));
+}
+
+const TOOLS = [
+  { type: "function", function: { name: "open_url", description: "Open a URL", parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } },
+  { type: "function", function: { name: "open_app", description: "Open a known app", parameters: { type: "object", properties: { app: { type: "string", enum: ["youtube","instagram","telegram","tiktok","whatsapp","twitter","x","spotify","maps","github"] }, query: { type: "string" } }, required: ["app"] } } },
+  { type: "function", function: { name: "call_contact", description: "Start a phone call", parameters: { type: "object", properties: { number: { type: "string" }, name: { type: "string" } }, required: ["number"] } } },
+  { type: "function", function: { name: "send_sms", description: "Compose SMS", parameters: { type: "object", properties: { number: { type: "string" }, text: { type: "string" } }, required: ["number","text"] } } },
+  { type: "function", function: { name: "send_email", description: "Compose email", parameters: { type: "object", properties: { to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["to"] } } },
+  { type: "function", function: { name: "read_contacts", description: "Search user's contacts", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
+  { type: "function", function: { name: "instagram_action", description: "Open IG profile, prepare follow/dm/post/story", parameters: { type: "object", properties: { kind: { type: "string", enum: ["open","follow","dm","post","story"] }, target: { type: "string" }, text: { type: "string" } }, required: ["kind","target"] } } },
+  { type: "function", function: { name: "telegram_action", description: "Open Telegram, dm, story, or actually send via bot", parameters: { type: "object", properties: { kind: { type: "string", enum: ["open","dm","story","send_bot"] }, target: { type: "string" }, text: { type: "string" } }, required: ["kind","target"] } } },
+  { type: "function", function: { name: "youtube_action", description: "YouTube actions", parameters: { type: "object", properties: { kind: { type: "string", enum: ["open","search","subscribe","like","comment"] }, target: { type: "string" } }, required: ["kind"] } } },
+  { type: "function", function: { name: "github_push", description: "Commit & push files to GitHub", parameters: { type: "object", properties: { repo: { type: "string" }, message: { type: "string" }, files: { type: "array", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } } } } }, required: ["repo","files"] } } },
+  { type: "function", function: { name: "figma_create", description: "Create/open a Figma file", parameters: { type: "object", properties: { name: { type: "string" }, brief: { type: "string" } }, required: ["name"] } } },
+];
+
+async function tryProvider(p: Provider, body: any): Promise<Response> {
+  const reqBody = { ...body, model: p.model(body._mode) };
+  delete reqBody._mode;
+  // OpenAI/DeepSeek/Gemini-OpenAI-compat endpoints don't accept tools the same way for some; keep simple
+  return await fetch(p.endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${p.key}`, "Content-Type": "application/json" },
+    body: JSON.stringify(reqBody),
+  });
 }
 
 Deno.serve(async (req) => {
@@ -117,20 +165,17 @@ Deno.serve(async (req) => {
 
   try {
     const { messages, modelId = "humanoid", attachments, memories, settings } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
 
     const persona = settings?.persona || "friend";
     const lang = settings?.language || "auto";
     const length = settings?.response_length || "balanced";
     const demo = !!settings?.demo_mode;
+    const adult = !!settings?.adult_mode;
 
-    let system = buildSystem(modelId, persona, lang, length, demo);
-    const model = MODEL_MAP[modelId] ?? MODEL_MAP.humanoid;
+    let system = buildSystem(modelId, persona, lang, length, demo, adult);
 
     if (memories && Array.isArray(memories) && memories.length > 0) {
-      const memBlock = memories.map((m: any) => `- ${m.key}: ${m.value}`).join("\n");
-      system += `\n\n[User memory — apply when relevant]\n${memBlock}`;
+      system += `\n\n[User memory — apply when relevant]\n` + memories.map((m: any) => `- ${m.key}: ${m.value}`).join("\n");
     }
 
     const finalMessages = [...messages];
@@ -168,31 +213,59 @@ Deno.serve(async (req) => {
       }
     }
 
-    const body: any = {
-      model,
+    const baseBody: any = {
       messages: [{ role: "system", content: system }, ...finalMessages],
       stream: true,
+      _mode: modelId,
     };
     if (modelId !== "voice") {
-      body.tools = TOOLS;
-      body.tool_choice = "auto";
+      baseBody.tools = TOOLS;
+      baseBody.tool_choice = "auto";
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+    const chain = chainFor(adult);
+    if (!chain.length) {
+      return new Response(JSON.stringify({ error: "No AI providers configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    let chosen: Provider | null = null;
+    let upstream: Response | null = null;
+    const tried: string[] = [];
+
+    for (const p of chain) {
+      tried.push(p.label);
+      try {
+        const r = await tryProvider(p, baseBody);
+        if (r.ok) { chosen = p; upstream = r; break; }
+        // soft-fail on 4xx/5xx → next
+        const txt = await r.text().catch(() => "");
+        console.warn(`[chat] ${p.label} failed ${r.status}: ${txt.slice(0, 200)}`);
+      } catch (e) {
+        console.warn(`[chat] ${p.label} threw`, e);
+      }
+    }
+
+    if (!chosen || !upstream || !upstream.body) {
+      return new Response(JSON.stringify({ error: `All providers failed: ${tried.join(", ")}` }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Wrap stream to inject a provider event at the very start
+    const enc = new TextEncoder();
+    const reader = upstream.body.getReader();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const meta = `event: provider\ndata: ${JSON.stringify({ provider: chosen!.id, label: chosen!.label, tried })}\n\n`;
+        controller.enqueue(enc.encode(meta));
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(value);
+        }
+        controller.close();
+      },
     });
 
-    if (!response.ok) {
-      if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limited. Try again shortly." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (response.status === 402) return new Response(JSON.stringify({ error: "AI credits exhausted. Add more in Settings → Workspace → Usage." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      const t = await response.text();
-      console.error("Gateway error:", response.status, t);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    return new Response(response.body, {
+    return new Response(stream, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no" },
     });
   } catch (e) {

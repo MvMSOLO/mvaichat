@@ -44,7 +44,7 @@ export default function Chat() {
   const recogRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { send, stop, streaming } = useChatStream();
+  const { send, stop, streaming, provider } = useChatStream();
   const { memories, autoExtract } = useMemory(user?.id);
   const { settings } = useSettings(user?.id);
 
@@ -153,6 +153,9 @@ export default function Chat() {
         }
       },
       settings,
+      (p) => {
+        if (p.id !== "lovable") toast.message(`Switched to ${p.label}`, { description: "Primary provider was busy — using a healthy backup." });
+      },
     );
 
     if (acc) {
@@ -318,10 +321,17 @@ export default function Chat() {
             </DropdownMenu>
           </div>
 
-          <Button size="icon" variant="ghost" onClick={() => setPanelOpen(true)} title="Open Mini Ozing"
-            className="rounded-xl hover:bg-muted/40">
-            <LayoutPanelLeft />
-          </Button>
+          <div className="flex items-center gap-2">
+            {provider && (
+              <span className="hidden sm:inline-flex text-[10px] uppercase tracking-wider px-2 py-1 rounded-full glass border border-border/40 text-muted-foreground">
+                via {provider.label}
+              </span>
+            )}
+            <Button size="icon" variant="ghost" onClick={() => setPanelOpen(true)} title="Open Mini Ozing"
+              className="rounded-xl hover:bg-muted/40">
+              <LayoutPanelLeft />
+            </Button>
+          </div>
         </header>
 
         {/* Messages */}

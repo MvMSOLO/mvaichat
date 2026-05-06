@@ -15,6 +15,8 @@ export function useChatStream() {
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  const [provider, setProvider] = useState<{ id: string; label: string } | null>(null);
+
   const send = useCallback(
     async (
       messages: ChatMsg[],
@@ -24,6 +26,7 @@ export function useChatStream() {
       memories?: Array<{ key: string; value: string }>,
       onToolCalls?: (calls: Array<{ name: string; args: any }>) => void,
       settings?: Record<string, any>,
+      onProvider?: (p: { id: string; label: string }) => void,
     ) => {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -80,14 +83,22 @@ export function useChatStream() {
           buf += decoder.decode(value, { stream: true });
 
           let idx: number;
+          let pendingEvent: string | null = null;
           while ((idx = buf.indexOf("\n")) !== -1) {
             let line = buf.slice(0, idx);
             buf = buf.slice(idx + 1);
             if (line.endsWith("\r")) line = line.slice(0, -1);
-            if (line.startsWith(":") || !line.trim()) continue;
+            if (line.startsWith(":")) continue;
+            if (!line.trim()) { pendingEvent = null; continue; }
+            if (line.startsWith("event: ")) { pendingEvent = line.slice(7).trim(); continue; }
             if (!line.startsWith("data: ")) continue;
             const json = line.slice(6).trim();
             if (json === "[DONE]") { done = true; break; }
+            if (pendingEvent === "provider") {
+              try { const p = JSON.parse(json); setProvider(p); onProvider?.(p); } catch {}
+              pendingEvent = null;
+              continue;
+            }
             try { handleParsed(JSON.parse(json)); } catch {
               buf = line + "\n" + buf;
               break;
@@ -126,7 +137,7 @@ export function useChatStream() {
     abortRef.current?.abort();
   }, []);
 
-  return { send, stop, streaming };
+  return { send, stop, streaming, provider };
 }
 
 export async function generateTitle(message: string): Promise<string> {

@@ -56,6 +56,7 @@ export default function Settings() {
   const [language, setLanguage] = useState("auto");
   const [length, setLength] = useState("balanced");
   const [demo, setDemo] = useState(false);
+  const [adult, setAdult] = useState(false);
   const [perms, setPerms] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
 
@@ -73,6 +74,7 @@ export default function Settings() {
         setLanguage((s.data as any).language || "auto");
         setLength((s.data as any).response_length || "balanced");
         setDemo(!!(s.data as any).demo_mode);
+        setAdult(!!(s.data as any).adult_mode);
         setPerms((s.data as any).permissions || {});
       }
     });
@@ -90,6 +92,7 @@ export default function Settings() {
         language,
         response_length: length,
         demo_mode: demo,
+        adult_mode: adult,
         permissions: perms,
       } as any).eq("user_id", user.id),
     ]);
@@ -158,6 +161,9 @@ export default function Settings() {
           <Section title="Demo rejim" icon={FlaskConical}>
             <Row label="Demo (real harakat bajarmasdan ko'rsatish)" desc="Yoqilganda AI SMS yubormaydi, follow bosmaydi — faqat namoyish qiladi.">
               <Switch checked={demo} onCheckedChange={setDemo} />
+            </Row>
+            <Row label="Erkin rejim (18+)" desc="Yoqilganda AI ochiq, dadil, sertstik javoblar yoza oladi. Real shikast yoki noqonuniy harakatlar baribir taqiqlanadi.">
+              <Switch checked={adult} onCheckedChange={setAdult} />
             </Row>
           </Section>
 
