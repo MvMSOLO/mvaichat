@@ -137,7 +137,7 @@ export function useChatStream() {
     abortRef.current?.abort();
   }, []);
 
-  return { send, stop, streaming };
+  return { send, stop, streaming, provider };
 }
 
 export async function generateTitle(message: string): Promise<string> {
