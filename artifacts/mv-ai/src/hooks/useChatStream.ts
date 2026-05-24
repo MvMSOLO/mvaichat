@@ -40,15 +40,15 @@ export function useChatStream() {
         });
 
         if (resp.status === 429) {
-          toast.error("Slow down", { description: "Too many requests. Try again in a moment." });
+          toast.error("Sekinroq yuboring", { description: "So'rovlar ko'p. Biroz kuting." });
           return;
         }
         if (resp.status === 402) {
-          toast.error("Out of AI credits", { description: "Add credits in Settings → Workspace → Usage." });
+          toast.error("AI kreditlari tugadi", { description: "Settings → Workspace → Usage." });
           return;
         }
         if (!resp.ok || !resp.body) {
-          toast.error("Connection error");
+          toast.error("Ulanish xatosi");
           return;
         }
 
@@ -57,6 +57,7 @@ export function useChatStream() {
         let buf = "";
         let done = false;
         const toolAcc: Record<number, { name: string; args: string }> = {};
+        let pendingEvent: string | null = null;
 
         const handleParsed = (parsed: any) => {
           const delta = parsed.choices?.[0]?.delta;
@@ -66,7 +67,7 @@ export function useChatStream() {
             for (const tc of delta.tool_calls) {
               const idx = tc.index ?? 0;
               if (!toolAcc[idx]) toolAcc[idx] = { name: "", args: "" };
-              if (tc.function?.name) toolAcc[idx].name = tc.function.name;
+              if (tc.function?.name) toolAcc[idx].name += tc.function.name;
               if (tc.function?.arguments) toolAcc[idx].args += tc.function.arguments;
             }
           }
@@ -77,22 +78,37 @@ export function useChatStream() {
           if (d) break;
           buf += decoder.decode(value, { stream: true });
           let idx: number;
-          let pendingEvent: string | null = null;
           while ((idx = buf.indexOf("\n")) !== -1) {
             let line = buf.slice(0, idx);
             buf = buf.slice(idx + 1);
             if (line.endsWith("\r")) line = line.slice(0, -1);
             if (line.startsWith(":")) continue;
             if (!line.trim()) { pendingEvent = null; continue; }
-            if (line.startsWith("event: ")) { pendingEvent = line.slice(7).trim(); continue; }
+            if (line.startsWith("event: ")) {
+              pendingEvent = line.slice(7).trim();
+              continue;
+            }
             if (!line.startsWith("data: ")) continue;
             const json = line.slice(6).trim();
             if (json === "[DONE]") { done = true; break; }
+
             if (pendingEvent === "provider") {
               try { const p = JSON.parse(json); setProvider(p); onProvider?.(p); } catch {}
               pendingEvent = null;
               continue;
             }
+
+            // image_result: server generated an image via generate_image tool
+            if (pendingEvent === "image_result") {
+              try {
+                const img = JSON.parse(json);
+                if (img.markdown) onDelta(img.markdown);
+              } catch {}
+              pendingEvent = null;
+              continue;
+            }
+
+            pendingEvent = null;
             try { handleParsed(JSON.parse(json)); } catch {
               buf = line + "\n" + buf;
               break;
@@ -100,14 +116,19 @@ export function useChatStream() {
           }
         }
 
+        // Non-image tool calls → pass to frontend handler
         const calls = Object.values(toolAcc)
-          .filter((c) => c.name)
-          .map((c) => { let args: any = {}; try { args = JSON.parse(c.args || "{}"); } catch {} return { name: c.name, args }; });
+          .filter((c) => c.name && c.name !== "generate_image")
+          .map((c) => {
+            let args: any = {};
+            try { args = JSON.parse(c.args || "{}"); } catch {}
+            return { name: c.name, args };
+          });
         if (calls.length && onToolCalls) onToolCalls(calls);
       } catch (e: any) {
         if (e.name !== "AbortError") {
           console.error(e);
-          toast.error("Stream failed");
+          toast.error("Stream xatosi");
         }
       } finally {
         setStreaming(false);
@@ -133,8 +154,8 @@ export async function generateTitle(message: string): Promise<string> {
       body: JSON.stringify({ message }),
     });
     const data = await r.json();
-    return data?.title || "New chat";
+    return data?.title || "Yangi chat";
   } catch {
-    return "New chat";
+    return "Yangi chat";
   }
 }
