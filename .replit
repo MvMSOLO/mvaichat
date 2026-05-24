@@ -62,4 +62,3 @@ externalPort = 3000
 [userenv]
 
 [userenv.shared]
-OPENROUTER_API_KEY = "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"
