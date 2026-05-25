@@ -15,6 +15,10 @@ import { useMemory } from "@/hooks/useMemory";
 import { runSlash } from "@/lib/slashHandlers";
 import { useSettings } from "@/hooks/useSettings";
 import { runToolCalls } from "@/lib/autonomy";
+import { loadSkills, getEnabledSkillsPrompt } from "@/lib/skills";
+import { CommandPalette } from "@/components/CommandPalette";
+import { VoiceMode } from "@/components/VoiceMode";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -24,16 +28,24 @@ import {
   Pin, Trash2, ChevronDown, LayoutPanelLeft, LogOut, Image as ImageIcon, X,
   Sparkles, Copy, Check, RotateCcw, ThumbsUp, ThumbsDown, Search,
   MessageSquare, Clock, Download, Share2, Keyboard, ChevronRight,
+  Maximize2, Minimize2, Github, BookOpen, Zap, Palette, Type,
+  AlignLeft, AlignJustify, SlidersHorizontal, Heart, Laugh, Lightbulb,
+  Star, Flag, Camera, Link2,
 } from "lucide-react";
 
 interface Conversation { id: string; title: string; modelId: ModelId; pinned: boolean; updatedAt: string; }
+
+const CUSTOM_INSTRUCTIONS_KEY = "mv-custom-instructions";
+const getCustomInstructions = () => {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_INSTRUCTIONS_KEY) || "{}"); } catch { return {}; }
+};
 
 function formatTime(ts?: number | string): string {
   const d = ts ? new Date(ts) : new Date();
   const now = new Date();
   const diff = now.getTime() - d.getTime();
-  if (diff < 60000) return "now";
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 60000) return "hozir";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}d oldin`;
   if (diff < 86400000) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
@@ -43,8 +55,7 @@ function TypingDots() {
     <motion.div className="flex items-center gap-1.5 py-1 px-1" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {[0, 1, 2].map((i) => (
         <motion.span
-          key={i}
-          className="size-2 rounded-full bg-primary/60"
+          key={i} className="size-2 rounded-full bg-primary/60"
           animate={{ y: [0, -6, 0], opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
         />
@@ -63,64 +74,115 @@ function StreamingCursor() {
   );
 }
 
+const EMOJI_REACTIONS = [
+  { emoji: "👍", label: "like" },
+  { emoji: "❤️", label: "heart" },
+  { emoji: "🔥", label: "fire" },
+  { emoji: "💡", label: "idea" },
+  { emoji: "😄", label: "laugh" },
+  { emoji: "🤔", label: "think" },
+];
+
 function MessageActions({
-  content, onRegenerate, onReaction, reactions,
+  content, onRegenerate, onReaction, reactions, onPin, pinned, onFork,
 }: {
   content: string;
   onRegenerate?: () => void;
-  onReaction?: (type: "like" | "dislike") => void;
-  reactions?: { like?: boolean; dislike?: boolean };
+  onReaction?: (type: string) => void;
+  reactions?: Record<string, boolean>;
+  onPin?: () => void;
+  pinned?: boolean;
+  onFork?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
+
   return (
     <motion.div
-      className="flex items-center gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      className="flex items-center gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-wrap"
       initial={{ opacity: 0 }}
     >
       <button
         onClick={() => { navigator.clipboard.writeText(content); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
         className="p-1.5 rounded-lg hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
-        title="Copy"
+        title="Nusxalash"
       >
         {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
       </button>
       {onRegenerate && (
-        <button onClick={onRegenerate} className="p-1.5 rounded-lg hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors" title="Regenerate">
+        <button onClick={onRegenerate} className="p-1.5 rounded-lg hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors" title="Qayta yaratish">
           <RotateCcw className="size-3.5" />
         </button>
       )}
-      {onReaction && (
-        <>
-          <button
-            onClick={() => onReaction("like")}
-            className={`p-1.5 rounded-lg transition-colors ${reactions?.like ? "text-primary bg-primary/10" : "hover:bg-muted/80 text-muted-foreground hover:text-foreground"}`}
-            title="Good response"
-          >
-            <ThumbsUp className="size-3.5" />
-          </button>
-          <button
-            onClick={() => onReaction("dislike")}
-            className={`p-1.5 rounded-lg transition-colors ${reactions?.dislike ? "text-destructive bg-destructive/10" : "hover:bg-muted/80 text-muted-foreground hover:text-foreground"}`}
-            title="Bad response"
-          >
-            <ThumbsDown className="size-3.5" />
-          </button>
-        </>
+      {onPin && (
+        <button onClick={onPin} className={`p-1.5 rounded-lg transition-colors ${pinned ? "text-primary bg-primary/10" : "hover:bg-muted/80 text-muted-foreground hover:text-foreground"}`} title={pinned ? "Pindan chiqarish" : "Pinlash"}>
+          <Pin className="size-3.5" />
+        </button>
       )}
+      {onFork && (
+        <button onClick={onFork} className="p-1.5 rounded-lg hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors" title="Bu yerdan yangi chat">
+          <Share2 className="size-3.5" />
+        </button>
+      )}
+
+      {/* Emoji reactions */}
+      <div className="relative">
+        <button
+          onClick={() => setShowEmoji((v) => !v)}
+          className={`p-1.5 rounded-lg transition-colors ${showEmoji ? "bg-primary/10 text-primary" : "hover:bg-muted/80 text-muted-foreground hover:text-foreground"}`}
+          title="Reaksiya"
+        >
+          <Laugh className="size-3.5" />
+        </button>
+        <AnimatePresence>
+          {showEmoji && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 4 }}
+              className="absolute bottom-full mb-1 left-0 flex gap-0.5 glass-strong rounded-2xl p-1.5 border border-border/50 z-10"
+            >
+              {EMOJI_REACTIONS.map((r) => (
+                <motion.button
+                  key={r.label}
+                  onClick={() => { onReaction?.(r.label); setShowEmoji(false); }}
+                  whileHover={{ scale: 1.3 }}
+                  whileTap={{ scale: 0.9 }}
+                  className={`size-8 grid place-items-center rounded-xl text-base transition-colors ${reactions?.[r.label] ? "bg-primary/20" : "hover:bg-muted/60"}`}
+                >
+                  {r.emoji}
+                </motion.button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Show active emoji reactions */}
+      {reactions && Object.entries(reactions).filter(([, v]) => v).map(([k]) => {
+        const er = EMOJI_REACTIONS.find((r) => r.label === k);
+        return er ? (
+          <motion.span key={k} initial={{ scale: 0 }} animate={{ scale: 1 }}
+            className="px-1.5 py-0.5 rounded-full bg-primary/10 text-xs">{er.emoji}</motion.span>
+        ) : null;
+      })}
     </motion.div>
   );
 }
 
 const EMPTY_PROMPTS: Record<ModelId, string[]> = {
-  humanoid: ["Bugun meni qiziqtirgan narsa...", "Menga \u0634\u0639\u0631 yoz...", "Qanday qilib motivatsiya topaman?", "Yaxshi kitob tavsiya qil"],
+  humanoid: ["Bugun meni qiziqtirgan narsa...", "Menga she'r yoz...", "Qanday qilib motivatsiya topaman?", "Yaxshi kitob tavsiya qil"],
   ideal: ["Step by step tushuntir: neyron tarmoqlar", "Kuchli argumentlar yozish strategiyasi", "Murakkab qarorlar qabul qilish", "Dunyoning kelajagi qanday bo'ladi?"],
   code: ["React hook yoz: local storage sync", "Python FastAPI CRUD endpoint", "TypeScript generic utility types", "SQL query optimization misollar"],
   vision: ["Bu rasmni tahlil qil", "Screenshot UI ni tushuntir", "Logo dizayni haqida fikr ber", "Diagrammani o'qi va izohlа"],
   search: ["Hozirgi AI yangiliklari", "Crypto bozori ahvoli", "O'zbekiston texnologiya yangiliklari", "Eng yaxshi frontend freymvorklar 2025"],
   voice: ["Bugun nima qilishim kerak?", "Motivatsiya ber", "Qisqa maslahat", "Menga bir narsa ayt"],
-  agents: ["Biznes strategiya ishlab chiq", "Kuchli marketing kampaniya", "Yangi loyiha uchun rejа", "Murakkab muammoni hal qil"],
+  agents: ["Biznes strategiya ishlab chiq", "Kuchli marketing kampaniya", "Yangi loyiha uchun reja", "Murakkab muammoni hal qil"],
   social: ["YouTube'da qidir: lo-fi music", "@MrBeast kanaliga obuna bo'l", "Telegram kanalim: @mvai", "Instagram'da post ulash"],
 };
+
+type DensityMode = "compact" | "comfortable" | "spacious";
+type FontSize = "sm" | "base" | "lg";
 
 export default function Chat() {
   const { user, signOut } = useAuth();
@@ -136,15 +198,55 @@ export default function Chat() {
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([]);
   const [listening, setListening] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [showTimestamps, setShowTimestamps] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [voiceModeOpen, setVoiceModeOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [density, setDensity] = useState<DensityMode>("comfortable");
+  const [fontSize, setFontSize] = useState<FontSize>("base");
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastStreamedText, setLastStreamedText] = useState("");
+  const [pinnedMsgIndices, setPinnedMsgIndices] = useState<Set<number>>(new Set());
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [urlInputOpen, setUrlInputOpen] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+
   const recogRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { send, stop, streaming, provider } = useChatStream();
   const { memories, autoExtract } = useMemory(user?.id);
   const { settings } = useSettings(user?.id);
+
+  // Load custom instructions + skills on mount
+  const getEnrichedSettings = useCallback(() => {
+    const ci = getCustomInstructions();
+    const skills = loadSkills();
+    const skillsPrompt = getEnabledSkillsPrompt(skills);
+    return {
+      ...settings,
+      customInstructions: ci.about ? `USER INFO: ${ci.about}` : "",
+      customStyle: ci.style ? `STYLE PREFERENCE: ${ci.style}` : "",
+      skillsPrompt,
+    };
+  }, [settings]);
+
+  // Check for GitHub pending import
+  useEffect(() => {
+    const pending = localStorage.getItem("mv-pending-import");
+    if (pending) {
+      try {
+        const { content, filename } = JSON.parse(pending);
+        localStorage.removeItem("mv-pending-import");
+        const preview = content.slice(0, 500);
+        setInput(`GitHub'dan import qilindi: **${filename}**\n\n\`\`\`\n${preview}${content.length > 500 ? "\n…" : ""}\n\`\`\`\n\nBu fayl haqida nima qilishim kerak?`);
+        toast.success(`"${filename}" import qilindi`);
+      } catch {}
+    }
+  }, []);
 
   const loadConversations = useCallback(async () => {
     if (!user) return;
@@ -162,16 +264,13 @@ export default function Chat() {
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
   useEffect(() => {
-    if (!activeId) { setMessages([]); return; }
+    if (!activeId) { setMessages([]); setPinnedMsgIndices(new Set()); setSuggestions([]); return; }
     fetch(`/api/conversations/${activeId}/messages`, { credentials: "include" }).then(async (r) => {
       if (r.ok) {
         const data = await r.json();
         setMessages(data.map((m: any) => ({
-          role: m.role,
-          content: m.content,
-          attachments: m.attachments,
-          timestamp: new Date(m.createdAt || Date.now()).getTime(),
-          modelId: m.modelId,
+          role: m.role, content: m.content, attachments: m.attachments,
+          timestamp: new Date(m.createdAt || Date.now()).getTime(), modelId: m.modelId,
         })));
       }
     });
@@ -187,14 +286,69 @@ export default function Chat() {
     else setMood("idle");
   }, [streaming, input]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setPaletteOpen(true); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") { e.preventDefault(); setFocusMode((v) => !v); }
+      if (e.key === "Escape" && voiceModeOpen) setVoiceModeOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [voiceModeOpen]);
+
+  // Drag & drop handlers
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = () => setIsDragging(false);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setPendingAttachments((prev) => [...prev, dataUrl]);
+        if (modelId !== "vision") setModelId("vision");
+      };
+      reader.readAsDataURL(file);
+    });
+    if (files.length) toast.success(`${files.length} ta rasm biriktirildi`);
+  }, [modelId]);
+
+  // Clipboard paste handler (Ctrl+V for images)
+  useEffect(() => {
+    const handler = async (e: ClipboardEvent) => {
+      if (!e.clipboardData?.items) return;
+      for (const item of Array.from(e.clipboardData.items)) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (!file) continue;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            setPendingAttachments((prev) => [...prev, dataUrl]);
+            if (modelId !== "vision") setModelId("vision");
+            toast.success("Rasm clipboarddan qo'shildi");
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    };
+    document.addEventListener("paste", handler);
+    return () => document.removeEventListener("paste", handler);
+  }, [modelId]);
+
   // Auto-resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     e.target.style.height = "auto";
     e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
+    if (e.target.value.length === 0) setSuggestions([]);
   };
 
-  const newChat = () => { setActiveId(null); setMessages([]); setSheetOpen(false); };
+  const newChat = () => { setActiveId(null); setMessages([]); setSheetOpen(false); setSuggestions([]); };
 
   const handleRegenerate = async () => {
     if (!messages.length || streaming) return;
@@ -208,15 +362,10 @@ export default function Chat() {
       modelId,
       (chunk) => {
         acc += chunk;
-        setMessages((prev) => {
-          const next = [...prev];
-          next[next.length - 1] = { role: "assistant", content: acc, timestamp: Date.now() };
-          return next;
-        });
+        setMessages((prev) => { const next = [...prev]; next[next.length - 1] = { role: "assistant", content: acc, timestamp: Date.now() }; return next; });
       },
       undefined, memories,
       async (calls) => {
-        if (!calls.length) return;
         const results = await runToolCalls(calls);
         const summary = results.map((r) => r.message || (r.ok ? "Done" : `Error: ${r.error || ""}`)).join("\n");
         if (summary) {
@@ -224,42 +373,66 @@ export default function Chat() {
           setMessages((prev) => { const next = [...prev]; next[next.length - 1] = { role: "assistant", content: acc }; return next; });
         }
       },
-      settings,
+      getEnrichedSettings(),
     );
   };
 
-  const handleReaction = (index: number, type: "like" | "dislike") => {
+  const handleReaction = (index: number, type: string) => {
     setMessages((prev) => prev.map((m, i) => {
       if (i !== index) return m;
-      const reactions = { ...m.reactions };
-      if (type === "like") reactions.like = !reactions.like;
-      if (type === "dislike") reactions.dislike = !reactions.dislike;
+      const reactions = { ...(m.reactions as Record<string, boolean> || {}) };
+      reactions[type] = !reactions[type];
       return { ...m, reactions };
     }));
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || !user) return;
-    const text = input.trim();
+  const handlePinMsg = (index: number) => {
+    setPinnedMsgIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  };
+
+  const handleForkFromMessage = async (index: number) => {
+    const slicedMsgs = messages.slice(0, index + 1);
+    const r = await fetch("/api/conversations", {
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ title: "Fork: " + (messages[0]?.content || "Chat").slice(0, 40), modelId }),
+    });
+    if (!r.ok) return;
+    const conv = await r.json();
+    for (const m of slicedMsgs) {
+      await fetch(`/api/conversations/${conv.id}/messages`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ role: m.role, content: m.content }),
+      });
+    }
+    setActiveId(conv.id);
+    setMessages(slicedMsgs);
+    loadConversations();
+    toast.success("Chat fork qilindi ✓");
+  };
+
+  const handleSend = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
+    if ((!text && !pendingAttachments.length) || !user) return;
     const attachments = [...pendingAttachments];
     setInput("");
     setPendingAttachments([]);
+    setSuggestions([]);
     if (inputRef.current) inputRef.current.style.height = "auto";
 
     let convId = activeId;
     let isNew = false;
     if (!convId) {
       const r = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ title: "Yangi chat", modelId }),
       });
       if (!r.ok) { toast.error("Suhbat yaratishda xato"); return; }
       const conv = await r.json();
-      convId = conv.id;
-      setActiveId(convId);
-      isNew = true;
+      convId = conv.id; setActiveId(convId); isNew = true;
     }
 
     const userMsg: ChatMsg = { role: "user", content: text, attachments, timestamp: Date.now() };
@@ -306,12 +479,12 @@ export default function Chat() {
       modelId,
       (chunk) => {
         acc += chunk;
+        setLastStreamedText(acc);
         setMessages((prev) => { const next = [...prev]; next[next.length - 1] = { role: "assistant", content: acc }; return next; });
       },
       attachments.length > 0 ? attachments : undefined,
       memories,
       async (calls) => {
-        if (!calls.length) return;
         const results = await runToolCalls(calls);
         const summary = results.map((r) => r.message || (r.ok ? "Done" : `Error: ${r.error || ""}`)).join("\n");
         if (summary) {
@@ -319,7 +492,7 @@ export default function Chat() {
           setMessages((prev) => { const next = [...prev]; next[next.length - 1] = { role: "assistant", content: acc }; return next; });
         }
       },
-      settings,
+      getEnrichedSettings(),
     );
 
     if (acc) {
@@ -337,9 +510,28 @@ export default function Chat() {
         u.rate = 1.05; u.pitch = 1.1;
         window.speechSynthesis.speak(u);
       }
+      // Generate smart suggestions based on last reply
+      generateSmartSuggestions(acc, modelId);
       setMood("happy"); setTimeout(() => setMood("idle"), 1800);
     }
     loadConversations();
+  };
+
+  const generateSmartSuggestions = (aiReply: string, mode: ModelId) => {
+    const suggestions: Record<ModelId, string[]> = {
+      humanoid: ["Batafsil tushuntir", "Misollar kel", "Qanday boshlash mumkin?"],
+      ideal: ["Muqobil yondashuv bormi?", "Bu fikrni davom ettir", "Kamchiliklarini ayt"],
+      code: ["Testlar yoz", "Optimize qil", "Type safe qil", "Xatolarni qayta ko'r"],
+      vision: ["Yaxshilash yo'llari?", "Dizayn mezonlari", "Ranglar haqida"],
+      search: ["Yangi qidirish", "Manbalar ko'rsatir", "Solishtir"],
+      voice: ["Yana bir narsa", "Davom et", "Qisqaroq ayt"],
+      agents: ["Yangi strategiya", "Boshqacha yondashuv", "Natijani baholash"],
+      social: ["Boshqa platforma", "Post matni yoz", "DM yubor"],
+    };
+    const list = suggestions[mode] || suggestions.humanoid;
+    setSuggestions(list.slice(0, 3));
+    setShowSuggestions(true);
+    setTimeout(() => setShowSuggestions(false), 8000);
   };
 
   const toggleListen = () => {
@@ -348,30 +540,35 @@ export default function Chat() {
     if (listening) { recogRef.current?.stop(); setListening(false); return; }
     const r = new SR();
     r.continuous = false; r.interimResults = true; r.lang = "uz-UZ";
-    r.onresult = (e: any) => {
-      const t = Array.from(e.results).map((r: any) => r[0].transcript).join("");
-      setInput(t);
-    };
+    r.onresult = (e: any) => { const t = Array.from(e.results).map((r: any) => r[0].transcript).join(""); setInput(t); };
     r.onend = () => setListening(false);
     r.onerror = () => { setListening(false); toast.error("Mikrofon xatosi"); };
-    r.start();
-    recogRef.current = r;
-    setListening(true);
-    setMood("listening");
+    r.start(); recogRef.current = r; setListening(true); setMood("listening");
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setPendingAttachments((prev) => [...prev, dataUrl]);
-      if (modelId !== "vision") setModelId("vision");
-      toast.success("Rasm biriktirildi");
-    };
-    reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []).filter((f) => f.type.startsWith("image/"));
+    for (const file of files) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setPendingAttachments((prev) => [...prev, dataUrl]);
+        if (modelId !== "vision") setModelId("vision");
+      };
+      reader.readAsDataURL(file);
+    }
+    if (files.length) toast.success(`${files.length} ta rasm biriktirildi`);
     e.target.value = "";
+  };
+
+  const handleImageUrl = () => {
+    const url = urlInput.trim();
+    if (!url) return;
+    setPendingAttachments((prev) => [...prev, url]);
+    if (modelId !== "vision") setModelId("vision");
+    setUrlInput("");
+    setUrlInputOpen(false);
+    toast.success("Rasm URL qo'shildi");
   };
 
   const deleteConv = async (id: string) => {
@@ -388,14 +585,26 @@ export default function Chat() {
     loadConversations();
   };
 
-  const exportConversation = () => {
+  const exportConversation = (format: "txt" | "md" | "json" = "txt") => {
     if (!messages.length) return;
-    const text = messages.map((m) => `[${m.role.toUpperCase()}]\n${m.content}`).join("\n\n---\n\n");
-    const blob = new Blob([text], { type: "text/plain" });
+    let content = "";
+    const date = new Date().toLocaleDateString();
+    if (format === "json") {
+      content = JSON.stringify({ date, modelId, messages }, null, 2);
+    } else if (format === "md") {
+      content = `# MV AI Chat — ${date}\n\n`;
+      content += messages.map((m) => `## ${m.role === "user" ? "👤 Men" : "🤖 Ozing"}\n\n${m.content}`).join("\n\n---\n\n");
+    } else {
+      content = `MV AI Chat — ${date}\n${"=".repeat(40)}\n\n`;
+      content += messages.map((m) => `[${m.role.toUpperCase()}]\n${m.content}`).join("\n\n---\n\n");
+    }
+    const mime = format === "json" ? "application/json" : "text/" + (format === "md" ? "markdown" : "plain");
+    const blob = new Blob([content], { type: mime });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `mv-ai-chat-${Date.now()}.txt`;
+    a.download = `mv-ai-${Date.now()}.${format}`;
     a.click();
+    toast.success(`Chat .${format} formatda saqlandi`);
   };
 
   const filteredConversations = conversations.filter((c) =>
@@ -403,6 +612,9 @@ export default function Chat() {
   );
 
   const ActiveModel = MODELS[modelId];
+
+  const densityPad = { compact: "py-2", comfortable: "py-4", spacious: "py-8" }[density];
+  const fontSizeCls = { sm: "text-xs", base: "text-sm md:text-base", lg: "text-base md:text-lg" }[fontSize];
 
   const Sidebar = () => (
     <div className="flex flex-col h-full">
@@ -425,14 +637,18 @@ export default function Chat() {
           />
         </div>
       </div>
+
       <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        {pinnedMsgIndices.size > 0 && (
+          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary/60 flex items-center gap-1">
+            <Pin className="size-2.5" /> Pinlangan xabarlar ({pinnedMsgIndices.size})
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {filteredConversations.map((c) => (
             <motion.div
               key={c.id} layout
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               className={`group flex items-center gap-1 rounded-xl transition-colors ${activeId === c.id ? "bg-primary/10" : "hover:bg-muted/60"}`}
             >
               <button onClick={() => { setActiveId(c.id); setModelId(c.modelId as ModelId); setSheetOpen(false); }}
@@ -441,7 +657,7 @@ export default function Chat() {
                 <span className={`font-medium ${activeId === c.id ? "text-primary" : ""}`}>{c.title}</span>
                 <div className="text-[10px] text-muted-foreground/60 mt-0.5">{formatTime(c.updatedAt)}</div>
               </button>
-              <div className="flex opacity-0 group-hover:opacity-100 transition pr-1">
+              <div className="flex opacity-0 group-hover:opacity-100 transition pr-1 gap-0.5">
                 <button onClick={() => togglePin(c)} className="p-1.5 hover:bg-background rounded-md"><Pin className="size-3" /></button>
                 <button onClick={() => deleteConv(c.id)} className="p-1.5 hover:bg-background rounded-md text-destructive"><Trash2 className="size-3" /></button>
               </div>
@@ -454,11 +670,19 @@ export default function Chat() {
           </p>
         )}
       </div>
+
       <div className="p-2 border-t border-border/60 space-y-0.5">
-        <Button variant="ghost" className="w-full justify-start rounded-xl h-9 font-medium text-sm" onClick={() => navigate("/settings")}>
+        <Button variant="ghost" className="w-full justify-start rounded-xl h-9 font-medium text-sm gap-2" onClick={() => navigate("/skills")}>
+          <BookOpen className="size-4" /> Skills
+        </Button>
+        <Button variant="ghost" className="w-full justify-start rounded-xl h-9 font-medium text-sm gap-2" onClick={() => navigate("/github")}>
+          <Github className="size-4" /> GitHub
+        </Button>
+        <Button variant="ghost" className="w-full justify-start rounded-xl h-9 font-medium text-sm gap-2" onClick={() => navigate("/settings")}>
           <SettingsIcon className="size-4" /> Sozlamalar
         </Button>
-        <Button variant="ghost" className="w-full justify-start rounded-xl h-9 font-medium text-sm" onClick={async () => { await signOut(); navigate("/"); }}>
+        <Button variant="ghost" className="w-full justify-start rounded-xl h-9 font-medium text-sm gap-2 text-destructive/80 hover:text-destructive"
+          onClick={async () => { await signOut(); navigate("/"); }}>
           <LogOut className="size-4" /> Chiqish
         </Button>
       </div>
@@ -466,20 +690,79 @@ export default function Chat() {
   );
 
   return (
-    <div className="h-[100dvh] flex relative overflow-hidden bg-background">
+    <div
+      className="h-[100dvh] flex relative overflow-hidden bg-background"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="fixed inset-0 mesh-bg pointer-events-none" />
       <div className="fixed inset-0 aurora-bg opacity-30 pointer-events-none" />
       <div className="fixed inset-0 dot-grid-fade opacity-20 pointer-events-none" />
 
+      {/* Drag overlay */}
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[400] flex items-center justify-center"
+            style={{ background: "hsla(var(--primary), 0.15)", backdropFilter: "blur(8px)" }}
+          >
+            <motion.div
+              initial={{ scale: 0.8 }} animate={{ scale: 1 }}
+              className="glass-strong rounded-3xl border-2 border-dashed border-primary/60 p-16 text-center"
+            >
+              <ImageIcon className="size-16 text-primary mx-auto mb-4" />
+              <p className="text-xl font-display font-bold">Rasmni shu yerga tashlang</p>
+              <p className="text-muted-foreground mt-2">Vision mode avtomatik yoqiladi</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Command Palette */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        conversations={conversations}
+        onSelectConversation={(id) => { setActiveId(id); const c = conversations.find((c) => c.id === id); if (c) setModelId(c.modelId); }}
+        onNewChat={newChat}
+        onModelSwitch={(id) => setModelId(id)}
+        onExport={() => exportConversation("txt")}
+      />
+
+      {/* Voice Mode */}
+      <AnimatePresence>
+        {voiceModeOpen && (
+          <VoiceMode
+            onClose={() => setVoiceModeOpen(false)}
+            onSend={(text) => { setVoiceModeOpen(false); handleSend(text); }}
+            streamingText={lastStreamedText}
+            isStreaming={streaming}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-72 border-r border-border/60 glass-strong z-10">
-        <Sidebar />
-      </aside>
+      <AnimatePresence>
+        {!focusMode && (
+          <motion.aside
+            initial={{ x: -280, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -280, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="hidden md:flex w-72 border-r border-border/60 glass-strong z-10 flex-col"
+          >
+            <Sidebar />
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       <main className="flex-1 flex flex-col min-w-0 z-10">
         {/* Top bar */}
         <header className="flex items-center justify-between gap-2 px-3 md:px-5 py-3 border-b border-border/60 glass-strong">
           <div className="flex items-center gap-2">
+            {/* Mobile sidebar */}
             <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
               <SheetTrigger asChild>
                 <Button size="icon" variant="ghost" className="md:hidden rounded-xl"><Menu /></Button>
@@ -487,6 +770,14 @@ export default function Chat() {
               <SheetContent side="left" className="p-0 w-72"><Sidebar /></SheetContent>
             </Sheet>
 
+            {/* Focus mode toggle (desktop) */}
+            <Button size="icon" variant="ghost" onClick={() => setFocusMode((v) => !v)}
+              className={`hidden md:flex rounded-xl size-8 ${focusMode ? "bg-primary/10 text-primary" : ""}`}
+              title={focusMode ? "Sidebar ko'rsatish (Cmd+F)" : "Focus mode (Cmd+F)"}>
+              {focusMode ? <Maximize2 className="size-3.5" /> : <Minimize2 className="size-3.5" />}
+            </Button>
+
+            {/* Model picker */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="rounded-full glass gap-2 h-9 px-3 hover:bg-muted/40 border-border/60">
@@ -523,57 +814,107 @@ export default function Chat() {
           <div className="flex items-center gap-1.5">
             {provider && (
               <motion.span
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
                 className="hidden sm:inline-flex text-[10px] uppercase tracking-wider px-2 py-1 rounded-full glass border border-border/40 text-muted-foreground"
               >
                 {provider.label}
               </motion.span>
             )}
+
+            {/* Cmd+K hint */}
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg glass border border-border/40 text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            >
+              <Zap className="size-2.5" />
+              <kbd>⌘K</kbd>
+            </button>
+
             {messages.length > 0 && (
               <>
-                <Button size="icon" variant="ghost" onClick={() => setShowTimestamps((v) => !v)} title="Show timestamps"
+                <Button size="icon" variant="ghost" onClick={() => setShowTimestamps((v) => !v)}
                   className={`rounded-xl size-8 ${showTimestamps ? "bg-primary/10 text-primary" : ""}`}>
                   <Clock className="size-3.5" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={exportConversation} title="Export chat" className="rounded-xl size-8">
-                  <Download className="size-3.5" />
-                </Button>
+
+                {/* Export dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" className="rounded-xl size-8"><Download className="size-3.5" /></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="rounded-xl">
+                    <DropdownMenuItem onClick={() => exportConversation("txt")}>📝 TXT formatda</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => exportConversation("md")}>📄 Markdown formatda</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => exportConversation("json")}>🔧 JSON formatda</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             )}
-            <Button size="icon" variant="ghost" onClick={() => setPanelOpen(true)} title="Open Mini Ozing" className="rounded-xl size-8">
+
+            {/* Density & font */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className="rounded-xl size-8 hidden sm:flex"><SlidersHorizontal className="size-3.5" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl w-44 p-2">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 pb-1 font-semibold">Joylashuv</div>
+                {(["compact", "comfortable", "spacious"] as DensityMode[]).map((d) => (
+                  <DropdownMenuItem key={d} onClick={() => setDensity(d)} className="rounded-lg">
+                    {density === d && <Check className="size-3 mr-2 text-primary" />}
+                    {d === "compact" ? "Ixcham" : d === "comfortable" ? "Qulay" : "Keng"}
+                  </DropdownMenuItem>
+                ))}
+                <div className="h-px bg-border/50 my-1" />
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 pb-1 font-semibold">Matn o'lchami</div>
+                {(["sm", "base", "lg"] as FontSize[]).map((f) => (
+                  <DropdownMenuItem key={f} onClick={() => setFontSize(f)} className="rounded-lg">
+                    {fontSize === f && <Check className="size-3 mr-2 text-primary" />}
+                    {f === "sm" ? "Kichik" : f === "base" ? "O'rta" : "Katta"}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Theme switcher compact */}
+            <div className="hidden sm:block">
+              <ThemeSwitcher compact />
+            </div>
+
+            <Button size="icon" variant="ghost" onClick={() => setPanelOpen(true)} className="rounded-xl size-8">
               <LayoutPanelLeft className="size-4" />
             </Button>
           </div>
         </header>
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 md:px-6 py-6">
+        <div ref={scrollRef} className={`flex-1 overflow-y-auto px-3 md:px-6 ${densityPad}`}>
           <ModeShell mode={modelId}>
             {messages.length === 0 ? (
               <EmptyState model={ActiveModel} onPick={(s) => { setInput(s); inputRef.current?.focus(); }} mood={mood} />
             ) : (
-              <div className={`mx-auto space-y-4 ${modelId === "code" ? "max-w-5xl" : modelId === "voice" ? "max-w-xl" : "max-w-3xl"}`}>
+              <div className={`mx-auto space-y-4 ${modelId === "code" ? "max-w-5xl" : modelId === "voice" ? "max-w-xl" : "max-w-3xl"} ${fontSizeCls}`}>
                 <AnimatePresence initial={false}>
                   {messages.map((m, i) => {
                     const isLast = i === messages.length - 1;
                     const isStreamingAssistant = m.role === "assistant" && isLast && streaming;
                     const isUser = m.role === "user";
                     const isAssistant = m.role === "assistant";
+                    const isPinned = pinnedMsgIndices.has(i);
                     return (
                       <motion.div
-                        key={i}
-                        layout="position"
+                        key={i} layout="position"
                         initial={{ opacity: 0, x: isUser ? 20 : -20, y: 10, scale: 0.97 }}
                         animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
                         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: Math.min(i * 0.02, 0.1) }}
-                        className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"} group`}
+                        className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"} group ${isPinned ? "relative" : ""}`}
                       >
+                        {isPinned && (
+                          <div className="absolute -left-2 top-0 h-full w-0.5 rounded-full bg-primary/50" />
+                        )}
                         {isAssistant && (
                           <motion.div
                             className="shrink-0 mt-1"
-                            initial={{ scale: 0, rotate: -20 }}
-                            animate={{ scale: 1, rotate: 0 }}
+                            initial={{ scale: 0, rotate: -20 }} animate={{ scale: 1, rotate: 0 }}
                             transition={{ type: "spring", stiffness: 500, damping: 25, delay: 0.05 }}
                           >
                             <div className={`size-8 rounded-2xl glass grid place-items-center ring-1 ${isStreamingAssistant ? "ring-primary/40 shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)]" : "ring-primary/15"}`}>
@@ -587,7 +928,7 @@ export default function Chat() {
                             className={`rounded-3xl px-4 py-3 ${
                               isUser
                                 ? "bg-ink text-ink-foreground rounded-tr-md shadow-md"
-                                : "glass rounded-tl-md border border-border/30"
+                                : `glass rounded-tl-md border ${isPinned ? "border-primary/30 shadow-[0_0_20px_-8px_hsl(var(--primary)/0.3)]" : "border-border/30"}`
                             }`}
                             whileHover={isUser ? { scale: 1.003 } : {}}
                           >
@@ -596,29 +937,23 @@ export default function Chat() {
                                 {m.attachments.map((a, j) => (
                                   <motion.img key={j} src={a} alt="attachment"
                                     initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                                    className="rounded-xl max-h-40 border border-border" />
+                                    className="rounded-xl max-h-40 border border-border cursor-zoom-in" />
                                 ))}
                               </div>
                             )}
                             {isAssistant ? (
                               m.content
-                                ? <>
-                                    <MessageContent content={m.content} streaming={isStreamingAssistant} />
-                                    {isStreamingAssistant && <StreamingCursor />}
-                                  </>
+                                ? <><MessageContent content={m.content} streaming={isStreamingAssistant} />{isStreamingAssistant && <StreamingCursor />}</>
                                 : <TypingDots />
                             ) : (
-                              <p className="whitespace-pre-wrap text-sm md:text-base leading-relaxed">{m.content}</p>
+                              <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
                             )}
                           </motion.div>
 
-                          {/* Timestamp */}
                           <AnimatePresence>
                             {showTimestamps && m.timestamp && (
                               <motion.span
-                                initial={{ opacity: 0, y: -4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -4 }}
+                                initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                                 className="text-[10px] text-muted-foreground/50 mt-1 px-1"
                               >
                                 {formatTime(m.timestamp)}
@@ -626,13 +961,15 @@ export default function Chat() {
                             )}
                           </AnimatePresence>
 
-                          {/* Message actions */}
                           {isAssistant && m.content && !isStreamingAssistant && (
                             <MessageActions
                               content={m.content}
                               onRegenerate={isLast ? handleRegenerate : undefined}
                               onReaction={(type) => handleReaction(i, type)}
-                              reactions={m.reactions}
+                              reactions={m.reactions as Record<string, boolean>}
+                              onPin={() => handlePinMsg(i)}
+                              pinned={isPinned}
+                              onFork={() => handleForkFromMessage(i)}
                             />
                           )}
                         </div>
@@ -645,6 +982,28 @@ export default function Chat() {
           </ModeShell>
         </div>
 
+        {/* Smart suggestions */}
+        <AnimatePresence>
+          {showSuggestions && suggestions.length > 0 && !streaming && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
+              className="px-3 md:px-6 pb-2 flex gap-2 justify-center flex-wrap"
+            >
+              {suggestions.map((s, i) => (
+                <motion.button
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.06 }}
+                  onClick={() => { setInput(s); setShowSuggestions(false); inputRef.current?.focus(); }}
+                  whileHover={{ scale: 1.03, y: -1 }} whileTap={{ scale: 0.97 }}
+                  className="px-3 py-1.5 rounded-xl glass border border-border/40 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors flex items-center gap-1"
+                >
+                  <Sparkles className="size-2.5 text-primary" /> {s}
+                </motion.button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Composer */}
         <div className="px-3 md:px-6 pb-4 pt-2">
           <div className={`mx-auto ${modelId === "code" ? "max-w-5xl" : "max-w-3xl"} relative`}>
@@ -653,6 +1012,29 @@ export default function Chat() {
                 <SlashMenu filter={input} onPick={(c) => setInput(c.insert)} />
               )}
             </AnimatePresence>
+
+            {/* Image URL input */}
+            <AnimatePresence>
+              {urlInputOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
+                  className="flex gap-2 mb-2"
+                >
+                  <input
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleImageUrl(); if (e.key === "Escape") setUrlInputOpen(false); }}
+                    placeholder="https://example.com/image.jpg"
+                    className="flex-1 px-3 py-2 rounded-xl bg-muted/40 border border-border/50 text-sm outline-none focus:ring-1 focus:ring-primary/40 font-mono"
+                    autoFocus
+                  />
+                  <Button size="sm" onClick={handleImageUrl} className="rounded-xl">Qo'sh</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setUrlInputOpen(false)} className="rounded-xl"><X className="size-4" /></Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Pending attachments preview */}
             <AnimatePresence>
               {pendingAttachments.length > 0 && (
                 <motion.div
@@ -678,11 +1060,29 @@ export default function Chat() {
               transition={{ duration: 0.3 }}
             >
               <div className="flex items-end gap-1.5 p-2">
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
-                <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} title="Rasm biriktirish"
-                  className="rounded-xl shrink-0 size-9 hover:bg-primary/10">
-                  <ImageIcon className="size-4" />
-                </Button>
+                {/* Image attach */}
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFile} className="hidden" />
+                <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" className="rounded-xl shrink-0 size-9 hover:bg-primary/10">
+                      <ImageIcon className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="rounded-xl">
+                    <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                      <ImageIcon className="size-3.5 mr-2" /> Galereya
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => cameraRef.current?.click()}>
+                      <Camera className="size-3.5 mr-2" /> Kamera
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setUrlInputOpen(true)}>
+                      <Link2 className="size-3.5 mr-2" /> URL dan
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <textarea
                   ref={inputRef}
                   value={input}
@@ -691,15 +1091,22 @@ export default function Chat() {
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
                     if (e.key === "Escape") { setInput(""); if (inputRef.current) inputRef.current.style.height = "auto"; }
                   }}
-                  placeholder={`${ActiveModel.name} ga yozing… (Shift+Enter — yangi qator)`}
+                  placeholder={`${ActiveModel.name} ga yozing… · Shift+Enter yangi qator · Ctrl+V rasm`}
                   rows={1}
                   className="flex-1 bg-transparent outline-none resize-none px-2 py-2.5 text-sm placeholder:text-muted-foreground/50 leading-relaxed"
                   style={{ minHeight: 40, maxHeight: 160 }}
                 />
-                <Button size="icon" variant={listening ? "default" : "ghost"} onClick={toggleListen} title="Ovozli kiritish"
-                  className={`rounded-xl shrink-0 size-9 ${listening ? "bg-primary text-primary-foreground animate-pulse-glow" : "hover:bg-primary/10"}`}>
-                  {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+
+                {/* Voice mode button */}
+                <Button
+                  size="icon" variant="ghost"
+                  onClick={() => setVoiceModeOpen(true)}
+                  className="rounded-xl shrink-0 size-9 hover:bg-violet-500/10 text-muted-foreground hover:text-violet-400"
+                  title="Ideal Voice Mode"
+                >
+                  <Mic className="size-4" />
                 </Button>
+
                 {streaming ? (
                   <motion.div whileTap={{ scale: 0.9 }}>
                     <Button size="icon" variant="destructive" onClick={stop} className="rounded-xl shrink-0 size-9">
@@ -708,21 +1115,24 @@ export default function Chat() {
                   </motion.div>
                 ) : (
                   <motion.div whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }}>
-                    <Button size="icon" onClick={handleSend} disabled={!input.trim() && !pendingAttachments.length}
-                      className="rounded-xl bg-ink text-ink-foreground hover:bg-ink/90 shrink-0 size-9 disabled:opacity-30 shine">
+                    <Button
+                      size="icon" onClick={() => handleSend()}
+                      disabled={!input.trim() && !pendingAttachments.length}
+                      className="rounded-xl bg-ink text-ink-foreground hover:bg-ink/90 shrink-0 size-9 disabled:opacity-30 shine"
+                    >
                       <Send className="size-4" />
                     </Button>
                   </motion.div>
                 )}
               </div>
-              {/* Bottom hint */}
+
               <div className="flex items-center justify-between px-4 pb-2 text-[10px] text-muted-foreground/40">
                 <span className="flex items-center gap-1">
                   <Sparkles className="size-2.5" />
-                  MV AI · {ActiveModel.tagline}
+                  MV AI v7 · {ActiveModel.tagline}
                 </span>
                 <span className="hidden sm:flex items-center gap-1">
-                  <Keyboard className="size-2.5" /> Enter yuborish · Shift+Enter yangi qator
+                  <Keyboard className="size-2.5" /> ⌘K buyruqlar · Enter yuborish
                 </span>
               </div>
             </motion.div>
@@ -739,8 +1149,7 @@ function EmptyState({ model, onPick, mood }: { model: any; onPick: (s: string) =
   const prompts = EMPTY_PROMPTS[model.id as ModelId] || EMPTY_PROMPTS.humanoid;
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4"
     >
@@ -754,39 +1163,22 @@ function EmptyState({ model, onPick, mood }: { model: any; onPick: (s: string) =
           <Ozing mood={mood} size={56} gemColor={`hsl(${model.gem})`} />
         </div>
       </motion.div>
-
-      <motion.h2
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="font-display text-3xl md:text-4xl tracking-tight font-bold mb-2"
-      >
+      <motion.h2 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+        className="font-display text-3xl md:text-4xl tracking-tight font-bold mb-2">
         {model.name}
       </motion.h2>
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="text-muted-foreground text-base max-w-sm mb-10"
-      >
+      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
+        className="text-muted-foreground text-base max-w-sm mb-10">
         {model.description}
       </motion.p>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full"
-      >
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+        className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full">
         {prompts.map((p, i) => (
           <motion.button
-            key={i}
-            onClick={() => onPick(p)}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            key={i} onClick={() => onPick(p)}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 + i * 0.06 }}
-            whileHover={{ scale: 1.02, y: -2 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.98 }}
             className="text-left px-4 py-3 rounded-2xl glass border border-border/40 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 text-sm text-foreground/80 group"
           >
             <span className="group-hover:text-foreground transition-colors">{p}</span>

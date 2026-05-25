@@ -308,6 +308,21 @@ Use these for: analytics, comparisons, research results, news digests, ranked li
     sys += `\n\nKNOWN ABOUT USER: ${memStr}`;
   }
 
+  // Custom instructions — injected from user settings page
+  if (settings) {
+    const s = settings as any;
+    if (s.customInstructions && typeof s.customInstructions === "string" && s.customInstructions.trim()) {
+      sys += `\n\nCUSTOM USER INFO:\n${s.customInstructions.trim()}`;
+    }
+    if (s.customStyle && typeof s.customStyle === "string" && s.customStyle.trim()) {
+      sys += `\n\nCUSTOM RESPONSE STYLE:\n${s.customStyle.trim()}`;
+    }
+    // Active skills — injected from Skills page
+    if (s.skillsPrompt && typeof s.skillsPrompt === "string" && s.skillsPrompt.trim()) {
+      sys += `\n${s.skillsPrompt}`;
+    }
+  }
+
   return sys;
 }
 
