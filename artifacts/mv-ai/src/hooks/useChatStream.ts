@@ -6,6 +6,9 @@ export interface ChatMsg {
   role: "user" | "assistant";
   content: string;
   attachments?: string[];
+  timestamp?: number;
+  modelId?: string;
+  reactions?: { like?: boolean; dislike?: boolean };
 }
 
 const CHAT_URL = "/api/chat";
@@ -25,6 +28,7 @@ export function useChatStream() {
       onToolCalls?: (calls: Array<{ name: string; args: any }>) => void,
       settings?: Record<string, any>,
       onProvider?: (p: { id: string; label: string }) => void,
+      onToolResult?: (tool: string, markdown: string, data?: any) => void,
     ) => {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -94,31 +98,48 @@ export function useChatStream() {
 
             if (pendingEvent === "provider") {
               try { const p = JSON.parse(json); setProvider(p); onProvider?.(p); } catch {}
-              pendingEvent = null;
-              continue;
+              pendingEvent = null; continue;
             }
-
-            // image_result: server generated an image via generate_image tool
             if (pendingEvent === "image_result") {
               try {
                 const img = JSON.parse(json);
                 if (img.markdown) onDelta(img.markdown);
               } catch {}
-              pendingEvent = null;
-              continue;
+              pendingEvent = null; continue;
+            }
+            if (pendingEvent === "tool_result") {
+              try {
+                const res = JSON.parse(json);
+                if (res.markdown) onDelta(res.markdown);
+                if (onToolResult) onToolResult(res.tool, res.markdown || "", res.data || res.text);
+                // Handle client-side actions
+                if (res.tool === "copy_to_clipboard" && res.text) {
+                  navigator.clipboard.writeText(res.text).catch(() => {});
+                }
+                if (res.tool === "create_reminder" && res.data) {
+                  const { title, minutes, message } = res.data;
+                  setTimeout(() => {
+                    if ("Notification" in window && Notification.permission === "granted") {
+                      new Notification(`⏰ ${title}`, { body: message || title });
+                    } else {
+                      toast.info(`⏰ Reminder: ${title}`, { description: message });
+                    }
+                  }, minutes * 60 * 1000);
+                }
+              } catch {}
+              pendingEvent = null; continue;
             }
 
             pendingEvent = null;
             try { handleParsed(JSON.parse(json)); } catch {
-              buf = line + "\n" + buf;
-              break;
+              buf = line + "\n" + buf; break;
             }
           }
         }
 
         // Non-image tool calls → pass to frontend handler
         const calls = Object.values(toolAcc)
-          .filter((c) => c.name && c.name !== "generate_image")
+          .filter((c) => c.name && c.name !== "generate_image" && c.name !== "calculator" && c.name !== "web_search" && c.name !== "create_reminder" && c.name !== "copy_to_clipboard")
           .map((c) => {
             let args: any = {};
             try { args = JSON.parse(c.args || "{}"); } catch {}
@@ -138,9 +159,7 @@ export function useChatStream() {
     []
   );
 
-  const stop = useCallback(() => {
-    abortRef.current?.abort();
-  }, []);
+  const stop = useCallback(() => { abortRef.current?.abort(); }, []);
 
   return { send, stop, streaming, provider };
 }
@@ -155,7 +174,5 @@ export async function generateTitle(message: string): Promise<string> {
     });
     const data = await r.json();
     return data?.title || "Yangi chat";
-  } catch {
-    return "Yangi chat";
-  }
+  } catch { return "Yangi chat"; }
 }
