@@ -349,23 +349,23 @@ function evalCalculator(expression: string): { result: string; error?: string } 
   }
 }
 
-// ── Web search via DuckDuckGo Instant ─────────────────────────────────────
+// ── Web search via DuckDuckGo Instant ────────────────────────────────��────
 async function doWebSearch(query: string): Promise<string> {
   try {
     const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
     const r = await fetch(url, { headers: { "User-Agent": "MV-AI/7.0" } });
-    const data = await r.json();
+    const data = (await r.json()) as any;
     const parts: string[] = [];
-    if (data.AbstractText) parts.push(`**Summary**: ${data.AbstractText}`);
-    if (data.AbstractSource) parts.push(`**Source**: ${data.AbstractSource}`);
-    if (data.RelatedTopics?.length > 0) {
+    if (data?.AbstractText) parts.push(`**Summary**: ${data.AbstractText}`);
+    if (data?.AbstractSource) parts.push(`**Source**: ${data.AbstractSource}`);
+    if (data?.RelatedTopics?.length > 0) {
       const topics = data.RelatedTopics
         .filter((t: any) => t.Text)
         .slice(0, 4)
         .map((t: any) => `- ${t.Text}`);
       if (topics.length) parts.push(`**Related**:\n${topics.join("\n")}`);
     }
-    if (data.Answer) parts.unshift(`**Answer**: ${data.Answer}`);
+    if (data?.Answer) parts.unshift(`**Answer**: ${data.Answer}`);
     return parts.length > 0 ? parts.join("\n\n") : `No instant results for "${query}" — using knowledge base.`;
   } catch {
     return `Search unavailable — using knowledge base for "${query}".`;
@@ -566,7 +566,7 @@ Respond briefly (2-4 sentences) from your agent's perspective.`;
           stream: false,
         }),
       });
-      const j = await r.json();
+      const j = (await r.json()) as any;
       const content = j?.choices?.[0]?.message?.content?.trim() || "...";
       agentOutputs[agent.id] = content;
       send("agent_message", { id: agent.id, content });
@@ -640,7 +640,7 @@ router.post("/chat/title", requireAuth, async (req: any, res: Response): Promise
         max_tokens: 16,
       }),
     });
-    const j = await r.json();
+    const j = (await r.json()) as any;
     const title = j?.choices?.[0]?.message?.content?.trim() || "Yangi chat";
     res.json({ title: title.slice(0, 60) });
   } catch { res.json({ title: "Yangi chat" }); }
@@ -675,7 +675,7 @@ router.post("/chat/logo", requireAuth, async (req: any, res: Response): Promise<
         max_tokens: 1024,
       }),
     });
-    const j = await r.json();
+    const j = (await r.json()) as any;
     const raw = j?.choices?.[0]?.message?.content?.trim() ?? "";
     const svgMatch = raw.match(/<svg[\s\S]*<\/svg>/i);
     res.json({ svg: svgMatch ? svgMatch[0] : raw });

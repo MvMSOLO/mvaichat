@@ -13,7 +13,7 @@ import {
   ArrowLeft, LogOut, Loader2, User, Sparkles, Volume2, Mic,
   Smartphone, FlaskConical, Shield, Phone, MessageSquare, Instagram,
   Youtube, Github, MapPin, Camera, Bot, Palette, BookOpen, FileText,
-  ChevronDown, ChevronUp, Info, Zap,
+  ChevronDown, ChevronUp, Info, Zap, Flame, BarChart3, Cog,
 } from "lucide-react";
 
 const PERSONAS = [
@@ -73,7 +73,13 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [customAbout, setCustomAbout] = useState("");
   const [customStyle, setCustomStyle] = useState("");
-  const [activeTab, setActiveTab] = useState<"profile" | "ai" | "theme" | "skills" | "privacy">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "ai" | "theme" | "skills" | "privacy" | "premium" | "advanced">("profile");
+  // FEATURE 14: Auto-updates toggle
+  const [autoUpdatesEnabled, setAutoUpdatesEnabled] = useState(true);
+  // FEATURE 15: Analytics sharing
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
+  // FEATURE 16: Beta features
+  const [betaFeaturesEnabled, setBetaFeaturesEnabled] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -108,7 +114,7 @@ export default function Settings() {
       }),
       fetch("/api/settings", {
         method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ soundEnabled: sound, voiceEnabled: voice, persona, language, responseLength: length, demoMode: demo, permissions: perms }),
+        body: JSON.stringify({ soundEnabled: sound, voiceEnabled: voice, persona, language, responseLength: length, demoMode: demo, permissions: perms, autoUpdates: autoUpdatesEnabled, analyticsEnabled, betaFeaturesEnabled }),
       }),
     ]);
     setSaving(false);
@@ -145,9 +151,11 @@ export default function Settings() {
   const TABS = [
     { id: "profile", label: "Profil", icon: User },
     { id: "ai", label: "AI", icon: Sparkles },
-    { id: "theme", label: "Tema", icon: Palette },
+          { id: "theme", label: "Tema", icon: Palette },
     { id: "skills", label: "Skills", icon: BookOpen },
     { id: "privacy", label: "Ruxsatlar", icon: Shield },
+    { id: "premium", label: "Premium", icon: Zap },
+    { id: "advanced", label: "Sozlamalar", icon: Cog },
   ] as const;
 
   return (
@@ -382,6 +390,63 @@ export default function Settings() {
                         />
                       </div>
                     ))}
+                  </div>
+                </Section>
+              </motion.div>
+            )}
+
+            {activeTab === "premium" && (
+              <motion.div key="premium" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                <Section icon={Zap} title="Premium Tarifasi" accent="text-amber-500">
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
+                      <p className="text-sm text-foreground font-semibold mb-2">Pro'ga upgrade qiling</p>
+                      <p className="text-xs text-muted-foreground mb-4">Barcha premium xususiyatlardan foydalaning</p>
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center gap-2 text-xs">
+                          <Sparkles className="size-3 text-amber-500" /> Cheksiz suhbatlar
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <Flame className="size-3 text-amber-500" /> Tezroq javoblar
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <BarChart3 className="size-3 text-amber-500" /> Chuqur tahlillar
+                        </div>
+                      </div>
+                      <Button className="w-full rounded-xl bg-amber-600 hover:bg-amber-700">Upgrade: $9.99/oy</Button>
+                    </div>
+                  </div>
+                </Section>
+              </motion.div>
+            )}
+
+            {activeTab === "advanced" && (
+              <motion.div key="advanced" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                <Section icon={Cog} title="Advanced Settings" accent="text-purple-500">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <div className="font-medium text-sm">Auto-updates</div>
+                        <div className="text-xs text-muted-foreground">Yangi xususiyatlar avtomatik</div>
+                      </div>
+                      <Switch checked={autoUpdatesEnabled} onCheckedChange={setAutoUpdatesEnabled} />
+                    </div>
+                    <div className="h-px bg-border/40" />
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <div className="font-medium text-sm">Analytics</div>
+                        <div className="text-xs text-muted-foreground">Foydalanish statistikasi</div>
+                      </div>
+                      <Switch checked={analyticsEnabled} onCheckedChange={setAnalyticsEnabled} />
+                    </div>
+                    <div className="h-px bg-border/40" />
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <div className="font-medium text-sm">Beta xususiyatlari</div>
+                        <div className="text-xs text-muted-foreground">Yangi tajriba oynalarni test qil</div>
+                      </div>
+                      <Switch checked={betaFeaturesEnabled} onCheckedChange={setBetaFeaturesEnabled} />
+                    </div>
                   </div>
                 </Section>
               </motion.div>
