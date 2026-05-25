@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { MagneticCursor } from "@/components/MagneticCursor";
+import { motion } from "framer-motion";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Chat from "./pages/Chat";
@@ -18,9 +19,28 @@ const queryClient = new QueryClient();
 
 function Protected({ children }: { children: JSX.Element }) {
   const { isSignedIn, isLoaded } = useClerkAuth();
-  if (!isLoaded) return null;
+  if (!isLoaded) return <AppLoader />;
   if (!isSignedIn) return <RedirectToSignIn />;
   return children;
+}
+
+function AuthRoute() {
+  const { isSignedIn, isLoaded } = useClerkAuth();
+  if (!isLoaded) return <AppLoader />;
+  if (isSignedIn) return <Navigate to="/chat" replace />;
+  return <Auth />;
+}
+
+function AppLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0c0a1a]">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+        className="size-10 rounded-full border-2 border-violet-600 border-t-transparent"
+      />
+    </div>
+  );
 }
 
 const App = () => {
@@ -41,7 +61,7 @@ const App = () => {
               <MagneticCursor />
               <Routes>
                 <Route path="/" element={<Landing />} />
-                <Route path="/auth" element={<Auth />} />
+                <Route path="/auth" element={<AuthRoute />} />
                 <Route path="/reset-password" element={<Navigate to="/auth" replace />} />
                 <Route path="/chat" element={<Protected><Chat /></Protected>} />
                 <Route path="/settings" element={<Protected><Settings /></Protected>} />

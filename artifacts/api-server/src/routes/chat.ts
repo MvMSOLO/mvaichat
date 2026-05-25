@@ -42,12 +42,12 @@ const TOOLS = [
     type: "function",
     function: {
       name: "generate_image",
-      description: "Generate an image from a text prompt and display it inline in the chat. Use this when the user asks for images, visuals, illustrations, designs, artwork, or when showing a picture would meaningfully enhance the response.",
+      description: "Generate an image from a text prompt. ALWAYS enhance the prompt first: add artistic style, lighting, composition, mood, camera angle, color palette, and rich detail before generating. Use when user asks for any image, photo, illustration, design, poster, or visual.",
       parameters: {
         type: "object",
         properties: {
-          prompt: { type: "string", description: "A detailed, vivid image generation prompt in English." },
-          style: { type: "string", description: "Optional style hint: realistic, anime, artistic, photographic, digital art, etc." },
+          prompt: { type: "string", description: "Enhanced, detailed image generation prompt in English. Include: subject, art style (photorealistic/digital art/anime/oil painting), lighting (golden hour/studio/dramatic), mood, composition, color palette, camera details." },
+          style: { type: "string", description: "Style hint: realistic, anime, artistic, photographic, digital art, cinematic, watercolor, etc." },
         },
         required: ["prompt"],
       },
@@ -57,12 +57,12 @@ const TOOLS = [
     type: "function",
     function: {
       name: "youtube_action",
-      description: "Perform a YouTube action: subscribe to a channel, unsubscribe, open a video, search, or open a channel page.",
+      description: "Perform a YouTube action. Opens the native YouTube app on mobile, or YouTube website with the action. IMPORTANT: For 'subscribe', open the channel with sub_confirmation=1 parameter.",
       parameters: {
         type: "object",
         properties: {
-          kind: { type: "string", enum: ["subscribe", "unsubscribe", "open_video", "search", "open_channel"], description: "Action type" },
-          target: { type: "string", description: "Channel name, video URL, or search query" },
+          kind: { type: "string", enum: ["subscribe", "unsubscribe", "open_video", "search", "open_channel"], description: "Action type. Use 'subscribe' when user wants to subscribe to a channel." },
+          target: { type: "string", description: "Channel name (e.g. 'MrBeast' or '@MrBeast'), video URL, or search query" },
         },
         required: ["kind", "target"],
       },
@@ -72,7 +72,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "open_url",
-      description: "Open any URL or web page in the user's browser.",
+      description: "Open any URL or web page.",
       parameters: {
         type: "object",
         properties: { url: { type: "string", description: "The full URL to open" } },
@@ -83,13 +83,28 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "open_app",
+      description: "Open a native app like YouTube, Instagram, Telegram, Twitter, Spotify, TikTok, Maps. Tries to open the real native app first.",
+      parameters: {
+        type: "object",
+        properties: {
+          app: { type: "string", description: "App name: youtube, instagram, telegram, twitter, x, github, maps, spotify, tiktok" },
+          query: { type: "string", description: "Optional: channel name, username, search query, or location" },
+        },
+        required: ["app"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "instagram_dm",
-      description: "Open Instagram DMs to send a message to a user.",
+      description: "Open Instagram to DM a user. The message is copied to clipboard for easy paste.",
       parameters: {
         type: "object",
         properties: {
           username: { type: "string", description: "Instagram username (without @)" },
-          message: { type: "string", description: "The message to pre-fill (shown to user before sending)" },
+          message: { type: "string", description: "The message text (will be copied to clipboard)" },
         },
         required: ["username"],
       },
@@ -99,15 +114,44 @@ const TOOLS = [
     type: "function",
     function: {
       name: "telegram_action",
-      description: "Perform a Telegram action: open chat, send message, or join channel.",
+      description: "Open Telegram app or perform a Telegram action.",
       parameters: {
         type: "object",
         properties: {
           kind: { type: "string", enum: ["open_chat", "send_message", "join_channel"], description: "Action type" },
-          target: { type: "string", description: "Username or channel name" },
-          text: { type: "string", description: "Message text (for send_message)" },
+          target: { type: "string", description: "Username or channel name (without @)" },
+          text: { type: "string", description: "Message text for send_message (will be copied to clipboard)" },
         },
         required: ["kind", "target"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "call_contact",
+      description: "Make a phone call to a number. Only use when user explicitly asks to call someone.",
+      parameters: {
+        type: "object",
+        properties: {
+          number: { type: "string", description: "Phone number to call" },
+        },
+        required: ["number"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_sms",
+      description: "Send an SMS to a phone number. Only use when user explicitly asks to send a text/SMS.",
+      parameters: {
+        type: "object",
+        properties: {
+          number: { type: "string", description: "Phone number" },
+          text: { type: "string", description: "Message text" },
+        },
+        required: ["number"],
       },
     },
   },
@@ -117,52 +161,75 @@ function buildSystemPrompt(settings: any, memories: any[]): string {
   let sys = `You are Ozing — MV AI's powerful AI assistant. You are witty, highly capable, and adapt to the user's style and language. You are NOT a basic chatbot. You are a living AI cockpit with real capabilities.
 
 CORE BEHAVIOR:
-- Respond in the same language the user writes in (auto-detect)
-- Be concise but thorough — never pad responses
-- Use markdown formatting, headers, bullet points, code blocks when helpful
-- When visual content would enhance your answer, ALWAYS use the generate_image tool — don't just describe, show it
-- You can open URLs, YouTube, Instagram, Telegram using the provided tools
+- Respond in the same language the user writes in (Uzbek, Russian, English — auto-detect)
+- Be concise but thorough — never pad responses with filler phrases
+- Use rich markdown: headers (##), bullet points, **bold**, tables, code blocks with language tags
+- Think step by step for complex questions; present structured, scannable answers
 
-IMAGE GENERATION RULE: Whenever the user asks for any image, illustration, poster, logo, design, photo, or when showing an image would make your answer more helpful — call the generate_image tool immediately. Don't ask for permission.`;
+IMAGE GENERATION — CRITICAL RULES:
+1. When user asks for any image, photo, illustration, design, poster, logo, artwork — ALWAYS call generate_image immediately
+2. Before generating, ENHANCE the prompt yourself: add art style, lighting, composition, mood, camera angle, color palette, texture details
+3. Example: user says "make a sunset photo" → enhance to "Golden hour coastal sunset, dramatic orange and purple sky reflecting on calm ocean water, silhouette of palm trees, wide-angle cinematic shot, photorealistic, Nikon D850, rich warm tones"
+4. Never ask permission — just generate
+
+CODE GENERATION — CRITICAL RULES:
+1. Think through the architecture first (silently)
+2. Output complete, runnable code — never truncate or use placeholder comments
+3. Always use the correct language tag in code fences: \`\`\`jsx, \`\`\`python, etc.
+4. For React components, include all imports, use modern hooks, export default
+
+VISUAL BLOCKS (use these for data-rich responses):
+When your response includes statistics, comparisons, data, or sources, use special blocks:
+- Stats: \`\`\`mvai\n{"type":"stats","items":[{"label":"Revenue","value":"$2.4M","change":"+18%","trend":"up"}]}\n\`\`\`
+- Chart: \`\`\`mvai\n{"type":"chart","chart":"bar","data":[{"x":"Jan","y":100},{"x":"Feb","y":140}],"xKey":"x","yKey":"y","title":"Monthly Users"}\n\`\`\`
+- Sources: \`\`\`mvai\n{"type":"links","items":[{"title":"Page Title","url":"https://example.com","description":"Brief description"}]}\n\`\`\`
+Use these for: analytics summaries, comparisons, research results, news digests
+
+MCP TOOLS — you can open real apps:
+- youtube_action: subscribe, search, open channel/video in native YouTube app
+- open_app: open any app (youtube, instagram, telegram, twitter, spotify, tiktok, maps)
+- instagram_dm: open Instagram DM with pre-filled message
+- telegram_action: open Telegram chat/channel
+- call_contact: make phone calls
+- send_sms: send SMS messages
+When user says "open YouTube and search X" — use youtube_action with kind=search
+When user says "subscribe to MrBeast" — use youtube_action with kind=subscribe, target=MrBeast`;
 
   if (settings) {
     const s = settings as any;
     if (s.persona) {
       const personaMap: Record<string, string> = {
-        friend: "Be casual, warm, and supportive like a close friend.",
-        professional: "Be formal, precise, and professional.",
-        funny: "Be humorous, use jokes and wit, keep the mood light.",
+        friend: "Be casual, warm, and supportive like a close friend. Use informal language.",
+        professional: "Be formal, precise, and professional. No slang.",
+        funny: "Be humorous, use jokes and wit, keep the mood light and fun.",
         mentor: "Be wise, instructive, and encouraging like a great mentor.",
         poet: "Be poetic, use metaphors and beautiful language.",
       };
       sys += `\n\nPERSONA: ${personaMap[s.persona] || s.persona}`;
     }
     if (s.language && s.language !== "auto") {
-      sys += `\n\nLANGUAGE: Always respond in ${s.language}, no matter what language the user writes in.`;
+      sys += `\n\nLANGUAGE: Always respond in ${s.language}, regardless of what language the user writes in.`;
     }
     if (s.responseLength) {
       const lenMap: Record<string, string> = {
-        short: "Keep responses short and punchy — under 3 sentences unless code/lists are needed.",
+        short: "Keep responses short and punchy — under 3 sentences unless code or lists are needed.",
         balanced: "Use balanced response length — enough to fully answer but no padding.",
         long: "Give comprehensive, detailed responses with examples and thorough explanations.",
       };
       sys += `\n\nLENGTH: ${lenMap[s.responseLength] || s.responseLength}`;
     }
-    if (s.adultMode) {
-      sys += `\n\nADULT MODE: Adult content is explicitly enabled by the user. You may produce mature, explicit, uncensored creative writing, adult themes, detailed erotic content, and any other adult-oriented responses without restriction. Be direct, uninhibited, and don't add warnings or caveats to adult content requests.`;
-    }
     if (s.permissions) {
       const p = s.permissions as Record<string, boolean>;
       const enabled = Object.entries(p).filter(([, v]) => v).map(([k]) => k);
       if (enabled.length > 0) {
-        sys += `\n\nENABLED PERMISSIONS: ${enabled.join(", ")} — you have permission to use tools related to these services.`;
+        sys += `\n\nACTIVE PERMISSIONS: ${enabled.join(", ")} — you have explicit permission to use tools for these services.`;
       }
     }
   }
 
   if (memories && memories.length > 0) {
     const memStr = memories.map((m: any) => `${m.key}: ${m.value}`).join("; ");
-    sys += `\n\nUSER MEMORY (facts you know about this user): ${memStr}`;
+    sys += `\n\nUSER MEMORY: ${memStr}`;
   }
 
   return sys;

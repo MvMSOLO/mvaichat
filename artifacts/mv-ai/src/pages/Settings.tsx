@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { Ozing3D } from "@/components/Ozing3D";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -10,9 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   ArrowLeft, LogOut, Loader2, User, Sparkles, Volume2, Mic,
-  Smartphone, Languages, Gauge, FlaskConical, Shield,
-  Lock, AlertTriangle, Phone, MessageSquare, Instagram,
-  Youtube, Github, MapPin, Camera, Bot, Globe, Hash,
+  Smartphone, FlaskConical, Shield,
+  Phone, MessageSquare, Instagram,
+  Youtube, Github, MapPin, Camera, Bot,
 } from "lucide-react";
 
 const PERSONAS = [
@@ -37,16 +37,16 @@ const LENGTHS = [
 ];
 
 const PERMS: { key: string; label: string; Icon: any; color: string }[] = [
-  { key: "contacts",   label: "Kontaktlar",  Icon: Phone,          color: "text-blue-400" },
-  { key: "sms",        label: "SMS",         Icon: MessageSquare,  color: "text-green-400" },
-  { key: "call",       label: "Qo'ng'iroq",  Icon: Phone,          color: "text-emerald-400" },
-  { key: "instagram",  label: "Instagram",   Icon: Instagram,      color: "text-pink-400" },
-  { key: "telegram",   label: "Telegram",    Icon: Bot,            color: "text-sky-400" },
-  { key: "youtube",    label: "YouTube",     Icon: Youtube,        color: "text-red-400" },
-  { key: "github",     label: "GitHub",      Icon: Github,         color: "text-gray-400" },
-  { key: "microphone", label: "Mikrofon",    Icon: Mic,            color: "text-violet-400" },
-  { key: "camera",     label: "Kamera",      Icon: Camera,         color: "text-amber-400" },
-  { key: "location",   label: "Joylashuv",   Icon: MapPin,         color: "text-orange-400" },
+  { key: "contacts",   label: "Kontaktlar",  Icon: Phone,         color: "text-blue-400" },
+  { key: "sms",        label: "SMS",         Icon: MessageSquare, color: "text-green-400" },
+  { key: "call",       label: "Qo'ng'iroq",  Icon: Phone,         color: "text-emerald-400" },
+  { key: "instagram",  label: "Instagram",   Icon: Instagram,     color: "text-pink-400" },
+  { key: "telegram",   label: "Telegram",    Icon: Bot,           color: "text-sky-400" },
+  { key: "youtube",    label: "YouTube",     Icon: Youtube,       color: "text-red-400" },
+  { key: "github",     label: "GitHub",      Icon: Github,        color: "text-gray-400" },
+  { key: "microphone", label: "Mikrofon",    Icon: Mic,           color: "text-violet-400" },
+  { key: "camera",     label: "Kamera",      Icon: Camera,        color: "text-amber-400" },
+  { key: "location",   label: "Joylashuv",   Icon: MapPin,        color: "text-orange-400" },
 ];
 
 export default function Settings() {
@@ -60,8 +60,6 @@ export default function Settings() {
   const [language, setLanguage] = useState("auto");
   const [length, setLength] = useState("balanced");
   const [demo, setDemo] = useState(false);
-  const [adult, setAdult] = useState(false);
-  const [adultConfirmed, setAdultConfirmed] = useState(false);
   const [perms, setPerms] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
 
@@ -79,8 +77,6 @@ export default function Settings() {
         setLanguage(s.language || "auto");
         setLength(s.responseLength || "balanced");
         setDemo(!!s.demoMode);
-        setAdult(!!s.adultMode);
-        if (s.adultMode) setAdultConfirmed(true);
         setPerms(s.permissions || {});
       }
     });
@@ -96,24 +92,11 @@ export default function Settings() {
       }),
       fetch("/api/settings", {
         method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ soundEnabled: sound, voiceEnabled: voice, persona, language, responseLength: length, demoMode: demo, adultMode: adult, permissions: perms }),
+        body: JSON.stringify({ soundEnabled: sound, voiceEnabled: voice, persona, language, responseLength: length, demoMode: demo, permissions: perms }),
       }),
     ]);
     setSaving(false);
     if (!r1.ok || !r2.ok) toast.error("Saqlashda xato"); else toast.success("✓ Sozlamalar saqlandi");
-  };
-
-  const handleAdultToggle = (v: boolean) => {
-    if (v && !adultConfirmed) {
-      toast("18+ Kattalar rejimi", {
-        description: "Bu rejim yoqilsa AI cheklovsiz, ochiq javoblar beradi. Davom etasizmi?",
-        action: { label: "Ha, yoqish", onClick: () => { setAdult(true); setAdultConfirmed(true); } },
-        cancel: { label: "Yo'q", onClick: () => {} },
-        duration: 10000,
-      });
-      return;
-    }
-    setAdult(v);
   };
 
   const Section = ({ icon: Icon, title, children, accent }: any) => (
@@ -258,39 +241,6 @@ export default function Settings() {
                   <div className="text-xs text-muted-foreground">Sinov uchun soxta AI javoblari</div>
                 </div>
                 <Switch checked={demo} onCheckedChange={setDemo} />
-              </div>
-
-              <div className="h-px bg-border/40" />
-
-              <div className={`rounded-xl p-3.5 transition-colors ${adult ? "bg-rose-500/10 border border-rose-500/30" : "glass border border-border/40"}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`p-1.5 rounded-lg ${adult ? "bg-rose-500/20 text-rose-400" : "bg-muted/60 text-muted-foreground"}`}>
-                      {adult ? <AlertTriangle className="size-4" /> : <Lock className="size-4" />}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-sm flex items-center gap-1.5">
-                        Kattalar rejimi
-                        {adult && <span className="text-xs px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 font-bold">18+</span>}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Cheklovsiz, ochiq AI javoblari</div>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={adult}
-                    onCheckedChange={handleAdultToggle}
-                    className={adult ? "data-[state=checked]:bg-rose-500" : ""}
-                  />
-                </div>
-                {adult && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    className="mt-2.5 pt-2.5 border-t border-rose-500/20 text-xs text-rose-400/80"
-                  >
-                    ⚠️ Kattalar rejimi faol — AI yosh cheklovlarsiz javob beradi
-                  </motion.div>
-                )}
               </div>
             </div>
           </Section>

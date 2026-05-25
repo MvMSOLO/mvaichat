@@ -188,9 +188,7 @@ export default function Chat() {
         }
       },
       settings,
-      (p) => {
-        if (p.id !== "openai") toast.message(`Switched to ${p.label}`, { description: "Primary provider was busy — using a healthy backup." });
-      },
+      undefined,
     );
 
     if (acc) {
@@ -395,38 +393,68 @@ export default function Chat() {
                 {messages.map((m, i) => {
                   const isLast = i === messages.length - 1;
                   const isStreamingAssistant = m.role === "assistant" && isLast && streaming;
+                  const isUser = m.role === "user";
                   return (
                   <motion.div
                     key={i}
-                    layout
-                    initial={{ opacity: 0, y: 12, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                    className={`flex gap-3 ${m.role === "user" ? "justify-end" : ""}`}
+                    layout="position"
+                    initial={{
+                      opacity: 0,
+                      x: isUser ? 24 : -24,
+                      y: 8,
+                      scale: 0.97,
+                    }}
+                    animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+                    transition={{
+                      duration: 0.4,
+                      ease: [0.16, 1, 0.3, 1],
+                      delay: Math.min(i * 0.03, 0.15),
+                    }}
+                    className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
                   >
-                    {m.role === "assistant" && (
-                      <div className="shrink-0">
-                        <div className="size-9 rounded-2xl glass grid place-items-center">
+                    {!isUser && (
+                      <motion.div
+                        className="shrink-0"
+                        initial={{ scale: 0, rotate: -20 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 22, delay: 0.05 }}
+                      >
+                        <div className="size-9 rounded-2xl glass grid place-items-center ring-1 ring-primary/20">
                           <Ozing mood={isStreamingAssistant ? "speaking" : "idle"} size={32} gemColor={`hsl(${ActiveModel.gem})`} />
                         </div>
-                      </div>
+                      </motion.div>
                     )}
-                    <div className={`max-w-[85%] rounded-3xl px-4 py-3 ${m.role === "user" ? "bg-ink text-ink-foreground rounded-tr-md" : "glass rounded-tl-md"}`}>
+                    <motion.div
+                      className={`max-w-[85%] rounded-3xl px-4 py-3 ${
+                        isUser
+                          ? "bg-ink text-ink-foreground rounded-tr-md shadow-md"
+                          : "glass rounded-tl-md"
+                      }`}
+                      whileHover={isUser ? { scale: 1.005 } : {}}
+                    >
                       {m.attachments && m.attachments.length > 0 && (
                         <div className="flex gap-2 mb-2 flex-wrap">
                           {m.attachments.map((a, j) => (
-                            <img key={j} src={a} alt="attachment" className="rounded-xl max-h-40 border border-border" />
+                            <motion.img
+                              key={j} src={a} alt="attachment"
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="rounded-xl max-h-40 border border-border"
+                            />
                           ))}
                         </div>
                       )}
-                      {m.role === "assistant" ? (
+                      {!isUser ? (
                         m.content
-                          ? <MessageContent content={m.content} />
+                          ? <>
+                              <MessageContent content={m.content} />
+                              {isStreamingAssistant && <StreamingCursor />}
+                            </>
                           : <TypingDots />
                       ) : (
                         <p className="whitespace-pre-wrap text-sm md:text-base">{m.content}</p>
                       )}
-                    </div>
+                    </motion.div>
                   </motion.div>
                   );
                 })}
@@ -513,13 +541,26 @@ export default function Chat() {
 
 function TypingDots() {
   return (
-    <div className="flex gap-1 py-2">
+    <div className="flex items-center gap-1.5 py-2 px-1">
       {[0, 1, 2].map((i) => (
-        <motion.span key={i} className="size-2 rounded-full bg-primary"
-          animate={{ y: [0, -5, 0], opacity: [0.4, 1, 0.4], scale: [1, 1.2, 1] }}
-          transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15 }} />
+        <motion.span
+          key={i}
+          className="size-2 rounded-full bg-primary/70"
+          animate={{ y: [0, -6, 0], opacity: [0.4, 1, 0.4], scale: [0.9, 1.3, 0.9] }}
+          transition={{ duration: 1.0, repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
+        />
       ))}
     </div>
+  );
+}
+
+function StreamingCursor() {
+  return (
+    <motion.span
+      className="inline-block size-[3px] rounded-full bg-primary align-middle ml-0.5 mb-0.5"
+      animate={{ opacity: [1, 0, 1] }}
+      transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
+    />
   );
 }
 
