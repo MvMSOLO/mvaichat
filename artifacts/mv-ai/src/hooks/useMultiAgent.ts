@@ -13,7 +13,7 @@ export interface AgentTurn {
   content: string;
 }
 
-const AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/multi-agent`;
+const AGENT_URL = `/api/multi-agent`;
 
 export function useMultiAgent() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
@@ -40,7 +40,6 @@ export function useMultiAgent() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           signal: ctrl.signal,
           body: JSON.stringify({ prompt, history }),
