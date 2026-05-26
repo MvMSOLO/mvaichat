@@ -2,9 +2,18 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { getAuth } from "@clerk/express";
 import { StreamChatBody, GenerateTitleBody, GenerateImageBody, GenerateLogoBody } from "@workspace/api-zod";
 
+// Extend Request type to include userId
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
+  }
+}
+
 const router: IRouter = Router();
 
-const requireAuth = (req: any, res: any, next: any) => {
+const requireAuth = (req: Request, res: Response, next: any) => {
   const auth = getAuth(req);
   const userId = auth?.userId;
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -349,12 +358,12 @@ function evalCalculator(expression: string): { result: string; error?: string } 
   }
 }
 
-// ── Web search via DuckDuckGo Instant ─────────────────────────────────────
+// ── Web search via DuckDuckGo Instant ────────────────────────────────��────
 async function doWebSearch(query: string): Promise<string> {
   try {
     const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
     const r = await fetch(url, { headers: { "User-Agent": "MV-AI/7.0" } });
-    const data = await r.json();
+    const data = (await r.json()) as any;
     const parts: string[] = [];
     if (data.AbstractText) parts.push(`**Summary**: ${data.AbstractText}`);
     if (data.AbstractSource) parts.push(`**Source**: ${data.AbstractSource}`);
@@ -372,7 +381,7 @@ async function doWebSearch(query: string): Promise<string> {
   }
 }
 
-router.post("/chat", requireAuth, async (req: any, res: Response): Promise<void> => {
+router.post("/chat", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const body = StreamChatBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
@@ -566,7 +575,7 @@ Respond briefly (2-4 sentences) from your agent's perspective.`;
           stream: false,
         }),
       });
-      const j = await r.json();
+      const j = (await r.json()) as any;
       const content = j?.choices?.[0]?.message?.content?.trim() || "...";
       agentOutputs[agent.id] = content;
       send("agent_message", { id: agent.id, content });
@@ -624,7 +633,7 @@ Write the perfect, comprehensive final answer. Use markdown. Be brilliant.`;
   res.end();
 });
 
-router.post("/chat/title", requireAuth, async (req: any, res: Response): Promise<void> => {
+router.post("/chat/title", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const body = GenerateTitleBody.safeParse(req.body);
   if (!body.success) { res.json({ title: "Yangi chat" }); return; }
   if (!OPENROUTER_API_KEY) { res.json({ title: "Yangi chat" }); return; }
@@ -640,13 +649,13 @@ router.post("/chat/title", requireAuth, async (req: any, res: Response): Promise
         max_tokens: 16,
       }),
     });
-    const j = await r.json();
+    const j = (await r.json()) as any;
     const title = j?.choices?.[0]?.message?.content?.trim() || "Yangi chat";
     res.json({ title: title.slice(0, 60) });
   } catch { res.json({ title: "Yangi chat" }); }
 });
 
-router.post("/chat/image", requireAuth, async (req: any, res: Response): Promise<void> => {
+router.post("/chat/image", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const body = GenerateImageBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   try {
@@ -659,7 +668,7 @@ router.post("/chat/image", requireAuth, async (req: any, res: Response): Promise
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.post("/chat/logo", requireAuth, async (req: any, res: Response): Promise<void> => {
+router.post("/chat/logo", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const body = GenerateLogoBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   if (!OPENROUTER_API_KEY) { res.status(500).json({ error: "No API key" }); return; }
@@ -675,7 +684,7 @@ router.post("/chat/logo", requireAuth, async (req: any, res: Response): Promise<
         max_tokens: 1024,
       }),
     });
-    const j = await r.json();
+    const j = (await r.json()) as any;
     const raw = j?.choices?.[0]?.message?.content?.trim() ?? "";
     const svgMatch = raw.match(/<svg[\s\S]*<\/svg>/i);
     res.json({ svg: svgMatch ? svgMatch[0] : raw });
