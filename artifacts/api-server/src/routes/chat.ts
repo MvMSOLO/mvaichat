@@ -452,7 +452,6 @@ router.post("/chat", requireAuth, async (req: any, res: Response): Promise<void>
 
   if (!OPENROUTER_API_KEY) { res.status(500).json({ error: "OPENROUTER_API_KEY not configured" }); return; }
 
-const model = MODEL_MAP[modelId as string] ?? LAGUNA;
   const systemContent = buildSystemPrompt(settings, memories as any[], modelId as string);
 
   const apiMessages: any[] = [{ role: "system", content: systemContent }];
@@ -500,83 +499,83 @@ const model = MODEL_MAP[modelId as string] ?? LAGUNA;
 
   if (!upstream.body) { res.write("data: [DONE]\n\n"); res.end(); return; }
 
-    const reader = upstream.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    const toolAcc: Record<number, { name: string; args: string }> = {};
-    let streamingDone = false;
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  const toolAcc: Record<number, { name: string; args: string }> = {};
+  let streamingDone = false;
 
-    while (!streamingDone) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx: number;
-      while ((idx = buf.indexOf("\n")) !== -1) {
-        let line = buf.slice(0, idx);
-        buf = buf.slice(idx + 1);
-        if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (!line.trim() || line.startsWith(":")) continue;
-        if (!line.startsWith("data: ")) { res.write(line + "\n"); continue; }
-        const json = line.slice(6).trim();
-        if (json === "[DONE]") { streamingDone = true; break; }
-        try {
-          const parsed = JSON.parse(json);
-          const delta = parsed.choices?.[0]?.delta;
-          if (delta?.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              const i = tc.index ?? 0;
-              if (!toolAcc[i]) toolAcc[i] = { name: "", args: "" };
-              if (tc.function?.name) toolAcc[i].name += tc.function.name;
-              if (tc.function?.arguments) toolAcc[i].args += tc.function.arguments;
-            }
+  while (!streamingDone) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n")) !== -1) {
+      let line = buf.slice(0, idx);
+      buf = buf.slice(idx + 1);
+      if (line.endsWith("\r")) line = line.slice(0, -1);
+      if (!line.trim() || line.startsWith(":")) continue;
+      if (!line.startsWith("data: ")) { res.write(line + "\n"); continue; }
+      const json = line.slice(6).trim();
+      if (json === "[DONE]") { streamingDone = true; break; }
+      try {
+        const parsed = JSON.parse(json);
+        const delta = parsed.choices?.[0]?.delta;
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const i = tc.index ?? 0;
+            if (!toolAcc[i]) toolAcc[i] = { name: "", args: "" };
+            if (tc.function?.name) toolAcc[i].name += tc.function.name;
+            if (tc.function?.arguments) toolAcc[i].args += tc.function.arguments;
           }
-          res.write(`data: ${json}\n\n`);
-        } catch { res.write(line + "\n"); }
-      }
+        }
+        res.write(`data: ${json}\n\n`);
+      } catch { res.write(line + "\n"); }
     }
-
-    // Process tool calls after streaming
-    const toolCalls = Object.values(toolAcc).filter((t) => t.name);
-    for (const tc of toolCalls) {
-      let args: any = {};
-      try { args = JSON.parse(tc.args || "{}"); } catch {}
-
-      if (tc.name === "generate_image") {
-        try {
-          const prompt = args.prompt || "beautiful image";
-          const style = args.style ? `, ${args.style} style` : "";
-          const aspect = args.aspect === "portrait" ? "768&height=1024" : args.aspect === "square" ? "1024&height=1024" : "1024&height=768";
-          const encodedPrompt = encodeURIComponent(`${prompt}${style}`);
-          const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${aspect}&nologo=true&enhance=true&seed=${Date.now()}`;
-          const imageMarkdown = `\n\n![${prompt}](${imageUrl})\n`;
-          res.write(`event: image_result\ndata: ${JSON.stringify({ markdown: imageMarkdown, url: imageUrl, prompt })}\n\n`);
-        } catch {}
-      } else if (tc.name === "calculator") {
-        const { result, error } = evalCalculator(args.expression || "0");
-        const ctx = args.context ? ` (${args.context})` : "";
-        const calcMarkdown = `\n\n**🔢 Calculator${ctx}:**\n\`\`\`\n${args.expression} = ${result}${error ? " ⚠️ " + error : ""}\n\`\`\`\n`;
-        res.write(`event: tool_result\ndata: ${JSON.stringify({ tool: "calculator", markdown: calcMarkdown })}\n\n`);
-      } else if (tc.name === "web_search") {
-        const searchResult = await doWebSearch(args.query || "");
-        const searchMarkdown = `\n\n**🔍 Search: "${args.query}"**\n\n${searchResult}\n`;
-        res.write(`event: tool_result\ndata: ${JSON.stringify({ tool: "web_search", markdown: searchMarkdown })}\n\n`);
-      } else if (tc.name === "create_reminder") {
-        const reminderData = { title: args.title, minutes: args.minutes, message: args.message || "" };
-        const reminderMarkdown = `\n\n**⏰ Reminder set:** "${args.title}" in ${args.minutes} minute${args.minutes !== 1 ? "s" : ""}\n`;
-        res.write(`event: tool_result\ndata: ${JSON.stringify({ tool: "create_reminder", markdown: reminderMarkdown, data: reminderData })}\n\n`);
-      } else if (tc.name === "copy_to_clipboard") {
-        const label = args.label || "Content";
-        const clipMarkdown = `\n\n**📋 ${label} copied to clipboard**\n`;
-        res.write(`event: tool_result\ndata: ${JSON.stringify({ tool: "copy_to_clipboard", markdown: clipMarkdown, text: args.text })}\n\n`);
-      }
-    }
-
-    res.write("data: [DONE]\n\n");
-    res.end();
-  } catch (e: any) {
-    if (!res.headersSent) res.status(500).json({ error: e.message });
-    else res.end();
   }
+
+  // Process tool calls after streaming
+  const toolCalls = Object.values(toolAcc).filter((t) => t.name);
+  for (const tc of toolCalls) {
+    let args: any = {};
+    try { args = JSON.parse(tc.args || "{}"); } catch {}
+
+    if (tc.name === "generate_image") {
+      try {
+        const prompt = args.prompt || "beautiful image";
+        const style = args.style ? `, ${args.style} style` : "";
+        const aspect = args.aspect === "portrait" ? "768&height=1024" : args.aspect === "square" ? "1024&height=1024" : "1024&height=768";
+        const encodedPrompt = encodeURIComponent(`${prompt}${style}`);
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${aspect}&nologo=true&enhance=true&seed=${Date.now()}`;
+        const imageMarkdown = `\n\n![${prompt}](${imageUrl})\n`;
+        res.write(`event: image_result\ndata: ${JSON.stringify({ markdown: imageMarkdown, url: imageUrl, prompt })}\n\n`);
+      } catch {}
+    } else if (tc.name === "calculator") {
+      const { result, error } = evalCalculator(args.expression || "0");
+      const ctx = args.context ? ` (${args.context})` : "";
+      const calcMarkdown = `\n\n**🔢 Calculator${ctx}:**\n\`\`\`\n${args.expression} = ${result}${error ? " ⚠️ " + error : ""}\n\`\`\`\n`;
+      res.write(`event: tool_result\ndata: ${JSON.stringify({ tool: "calculator", markdown: calcMarkdown })}\n\n`);
+    } else if (tc.name === "web_search") {
+      const searchResult = await doWebSearch(args.query || "");
+      const searchMarkdown = `\n\n**🔍 Search: "${args.query}"**\n\n${searchResult}\n`;
+      res.write(`event: tool_result\ndata: ${JSON.stringify({ tool: "web_search", markdown: searchMarkdown })}\n\n`);
+    } else if (tc.name === "create_reminder") {
+      const reminderData = { title: args.title, minutes: args.minutes, message: args.message || "" };
+      const reminderMarkdown = `\n\n**⏰ Reminder set:** "${args.title}" in ${args.minutes} minute${args.minutes !== 1 ? "s" : ""}\n`;
+      res.write(`event: tool_result\ndata: ${JSON.stringify({ tool: "create_reminder", markdown: reminderMarkdown, data: reminderData })}\n\n`);
+    } else if (tc.name === "copy_to_clipboard") {
+      const label = args.label || "Content";
+      const clipMarkdown = `\n\n**📋 ${label} copied to clipboard**\n`;
+      res.write(`event: tool_result\ndata: ${JSON.stringify({ tool: "copy_to_clipboard", markdown: clipMarkdown, text: args.text })}\n\n`);
+    }
+  }
+
+  res.write("data: [DONE]\n\n");
+  res.end();
+} catch (e: any) {
+  if (!res.headersSent) res.status(500).json({ error: e.message });
+  else res.end();
+}
 });
 
 // ── Multi-agent endpoint (replaces Supabase Edge Function) ─────────────────
