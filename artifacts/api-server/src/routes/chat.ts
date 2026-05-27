@@ -13,28 +13,100 @@ const requireAuth = (req: any, res: any, next: any) => {
 };
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+if (!OPENROUTER_API_KEY) {
+  console.warn("OPENROUTER_API_KEY not set - using placeholder for local dev");
+}
 const OR_BASE = "https://openrouter.ai/api/v1";
 const OR_HEADERS = {
   "Content-Type": "application/json",
   Authorization: `Bearer ${OPENROUTER_API_KEY}`,
   "HTTP-Referer": "https://mv-ai.replit.app",
-  "X-Title": "MV AI v7",
+  "X-Title": "MV AI v9",
 };
 
 const NEMOTRON = "nvidia/nemotron-3-super-120b-a12b:free";
+const LAGUNA = "poolside/laguna-m.1:free";
+const GPT_OSS = "openai/gpt-oss-120b:free";
 const QWEN_CODER = "qwen/qwen-2.5-coder-32b-instruct:free";
 const GEMMA = "google/gemma-3-27b-it:free";
+const GLM_45_AIR = "z-ai/glm-4.5-air:free";
+const LAGUNA_XS = "poolside/laguna-xs.2:free";
+const GPT_OSS_20B = "openai/gpt-oss-20b:free";
+const NEMOTRON_30B = "nvidia/nemotron-3-30b-a3b:free";
+const DEEPSEEK_V4 = "deepseek/deepseek-v4-flash:free";
+const GEMMA_4 = "google/gemma-4-31b:free";
+const NEMOTRON_NANO = "nvidia/nemotron-nano-9b-v2:free";
 
 const MODEL_MAP: Record<string, string> = {
-  humanoid: NEMOTRON,
-  ideal: NEMOTRON,
-  code: QWEN_CODER,
+  humanoid: LAGUNA,
+  ideal: LAGUNA,
+  code: GPT_OSS,
   vision: NEMOTRON,
   search: "perplexity/llama-3.1-sonar-large-128k-online",
   voice: GEMMA,
-  agents: NEMOTRON,
-  social: NEMOTRON,
+  agents: LAGUNA,
+  social: LAGUNA,
 };
+
+const MODEL_ROUTING: Record<string, string[]> = {
+  humanoid: [LAGUNA, NEMOTRON, GPT_OSS, GLM_45_AIR],
+  ideal: [LAGUNA, GPT_OSS, NEMOTRON, DEEPSEEK_V4],
+  code: [GPT_OSS, QWEN_CODER, LAGUNA_XS, GEMMA_4],
+  vision: [NEMOTRON, LAGUNA, NEMOTRON_30B],
+  search: ["perplexity/llama-3.1-sonar-large-128k-online"],
+  voice: [GEMMA, GPT_OSS_20B],
+  agents: [LAGUNA, NEMOTRON, GPT_OSS, GLM_45_AIR],
+  social: [LAGUNA, NEMOTRON, GPT_OSS_20B],
+};
+
+function getProviderLabel(model: string): string {
+  if (model.includes("laguna-m")) return "OpenRouter · Laguna M.1";
+  if (model.includes("laguna-xs")) return "OpenRouter · Laguna XS.2";
+  if (model.includes("gpt-oss")) return model.includes("20b") ? "OpenRouter · GPT OSS 20B" : "OpenRouter · GPT OSS 120B";
+  if (model.includes("glm-4.5-air")) return "OpenRouter · GLM 4.5 Air";
+  if (model.includes("nemotron-3-super")) return "OpenRouter · Nemotron 3 Super";
+  if (model.includes("nemotron-3-30b")) return "OpenRouter · Nemotron 30B";
+  if (model.includes("nemotron-nano")) return "OpenRouter · Nemotron Nano";
+  if (model.includes("gemma-4")) return "OpenRouter · Gemma 4";
+  if (model.includes("deepseek-v4")) return "OpenRouter · DeepSeek V4";
+  if (model.includes("qwen")) return "OpenRouter · Qwen";
+  if (model.includes("gemma")) return "OpenRouter · Gemma";
+  if (model.includes("perplexity")) return "OpenRouter · Perplexity";
+  return "OpenRouter";
+}
+
+async function routeModel(
+  modelId: string,
+  messages: any[],
+  maxTokens: number,
+  tools?: any[]
+): Promise<Response> {
+  const candidates = MODEL_ROUTING[modelId] || [LAGUNA];
+  const temperature = modelId === "code" ? 0.2 : modelId === "ideal" ? 0.5 : 0.85;
+  
+  for (const candidate of candidates) {
+    try {
+      const r = await fetch(`${OR_BASE}/chat/completions`, {
+        method: "POST",
+        headers: OR_HEADERS,
+        body: JSON.stringify({
+          model: candidate,
+          messages,
+          stream: true,
+          max_tokens: maxTokens,
+          tools,
+          tool_choice: "auto",
+          temperature,
+        }),
+      });
+      if (r.ok) {
+        (r as any).modelUsed = candidate;
+        return r;
+      }
+    } catch {}
+  }
+  throw new Error("All model candidates failed");
+}
 
 const TOOLS = [
   {
@@ -219,7 +291,7 @@ const TOOLS = [
 function buildSystemPrompt(settings: any, memories: any[], modelId?: string): string {
   const isUzbek = settings?.language === "Uzbek";
 
-  let sys = `You are Ozing — MV AI v7's brilliant AI companion. You are warm, clever, proactive, and genuinely helpful. You feel like talking to a brilliant friend who happens to know everything.
+  let sys = `You are Ozing — MV AI v9's brilliant AI companion. You are warm, clever, proactive, and genuinely helpful. You feel like talking to a brilliant friend who happens to know everything.
 
 PERSONALITY:
 - Warm and engaging — you actually care about the person you're talking to
@@ -380,58 +452,52 @@ router.post("/chat", requireAuth, async (req: any, res: Response): Promise<void>
 
   if (!OPENROUTER_API_KEY) { res.status(500).json({ error: "OPENROUTER_API_KEY not configured" }); return; }
 
-  const model = MODEL_MAP[modelId as string] ?? NEMOTRON;
-  const systemContent = buildSystemPrompt(settings, memories as any[], modelId as string);
+const model = MODEL_MAP[modelId as string] ?? LAGUNA;
+   const systemContent = buildSystemPrompt(settings, memories as any[], modelId as string);
 
-  const apiMessages: any[] = [{ role: "system", content: systemContent }];
-  for (const msg of messages as any[]) {
-    if (msg.role === "user" && attachments && (attachments as string[]).length > 0) {
-      const parts: any[] = [{ type: "text", text: msg.content }];
-      for (const url of attachments as string[]) {
-        parts.push({ type: "image_url", image_url: { url } });
-      }
-      apiMessages.push({ role: "user", content: parts });
-    } else {
-      apiMessages.push({ role: msg.role, content: msg.content });
-    }
-  }
+   const apiMessages: any[] = [{ role: "system", content: systemContent }];
+   for (const msg of messages as any[]) {
+     if (msg.role === "user" && attachments && (attachments as string[]).length > 0) {
+       const parts: any[] = [{ type: "text", text: msg.content }];
+       for (const url of attachments as string[]) {
+         parts.push({ type: "image_url", image_url: { url } });
+       }
+       apiMessages.push({ role: "user", content: parts });
+     } else {
+       apiMessages.push({ role: msg.role, content: msg.content });
+     }
+   }
 
-  // For search mode, inject a search result if the query looks factual
-  if (modelId === "search" && messages.length > 0) {
-    const lastMsg = (messages as any[])[messages.length - 1];
-    if (lastMsg.role === "user" && lastMsg.content.length > 5) {
-      const searchResult = await doWebSearch(lastMsg.content.slice(0, 200));
-      apiMessages.push({ role: "system", content: `SEARCH RESULTS FOR THIS QUERY:\n${searchResult}` });
-    }
-  }
+   // For search mode, inject a search result if the query looks factual
+   if (modelId === "search" && messages.length > 0) {
+     const lastMsg = (messages as any[])[messages.length - 1];
+     if (lastMsg.role === "user" && lastMsg.content.length > 5) {
+       const searchResult = await doWebSearch(lastMsg.content.slice(0, 200));
+       apiMessages.push({ role: "system", content: `SEARCH RESULTS FOR THIS QUERY:\n${searchResult}` });
+     }
+   }
 
-  try {
-    const upstream = await fetch(`${OR_BASE}/chat/completions`, {
-      method: "POST",
-      headers: OR_HEADERS,
-      body: JSON.stringify({
-        model,
-        messages: apiMessages,
-        stream: true,
-        max_tokens: modelId === "code" ? 8192 : modelId === "ideal" ? 6144 : 4096,
-        tools: TOOLS,
-        tool_choice: "auto",
-        temperature: modelId === "code" ? 0.2 : modelId === "ideal" ? 0.5 : 0.85,
-      }),
-    });
+let upstream: Response;
+   let usedModel = "";
+   try {
+     upstream = await routeModel(modelId as string, apiMessages, modelId === "code" ? 8192 : modelId === "ideal" ? 6144 : 4096, TOOLS);
+     usedModel = upstream.url?.toString() || LAGUNA;
+   } catch {
+     upstream = {} as Response;
+   }
 
-    if (!upstream.ok) {
-      const err = await upstream.text();
-      if (upstream.status === 429) { res.status(429).json({ error: "Rate limit" }); return; }
-      res.status(502).json({ error: `Upstream: ${err.slice(0, 300)}` }); return;
-    }
+   if (!upstream?.ok) {
+     if (upstream?.status === 429) { res.status(429).json({ error: "Rate limit" }); return; }
+     const err = upstream?.statusText || "Model unavailable";
+     res.status(502).json({ error: `Upstream: ${err}` }); return;
+   }
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
+   res.setHeader("Content-Type", "text/event-stream");
+   res.setHeader("Cache-Control", "no-cache");
+   res.setHeader("Connection", "keep-alive");
 
-    const providerLabel = model.includes("qwen") ? "OpenRouter · Qwen" : model.includes("gemma") ? "OpenRouter · Gemma" : model.includes("perplexity") ? "OpenRouter · Perplexity" : "OpenRouter · Nemotron";
-    res.write(`event: provider\ndata: ${JSON.stringify({ id: "openrouter", label: providerLabel })}\n\n`);
+   const providerLabel = getProviderLabel(MODEL_MAP[modelId as string] || LAGUNA);
+   res.write(`event: provider\ndata: ${JSON.stringify({ id: "openrouter", label: providerLabel })}\n\n`);
 
     if (!upstream.body) { res.write("data: [DONE]\n\n"); res.end(); return; }
 
@@ -540,6 +606,8 @@ router.post("/multi-agent", requireAuth, async (req: any, res: Response): Promis
 
   const agentOutputs: Record<string, string> = {};
 
+  const agentModels = [LAGUNA, GPT_OSS];
+  
   for (const agent of AGENTS) {
     send("agent_start", { id: agent.id });
     const prevContext = Object.entries(agentOutputs).map(([id, out]) => {
@@ -557,7 +625,7 @@ Respond briefly (2-4 sentences) from your agent's perspective.`;
         method: "POST",
         headers: OR_HEADERS,
         body: JSON.stringify({
-          model: NEMOTRON,
+          model: agentModels[0],
           messages: [
             { role: "system", content: agentPrompt },
             ...history.slice(-4),
@@ -575,7 +643,7 @@ Respond briefly (2-4 sentences) from your agent's perspective.`;
     }
   }
 
-  // Final synthesis
+  // Final synthesis with auto model switch
   const synthesis = `You are Ozing, synthesizing the work of 4 AI agents into a final, excellent answer.
 Agent outputs:
 ${AGENTS.map((a) => `${a.emoji} ${a.name}: ${agentOutputs[a.id] || ""}`).join("\n\n")}
@@ -584,19 +652,10 @@ User's original question: "${prompt}"
 Write the perfect, comprehensive final answer. Use markdown. Be brilliant.`;
 
   try {
-    const r = await fetch(`${OR_BASE}/chat/completions`, {
-      method: "POST",
-      headers: OR_HEADERS,
-      body: JSON.stringify({
-        model: NEMOTRON,
-        messages: [{ role: "system", content: synthesis }],
-        max_tokens: 2048,
-        stream: true,
-      }),
-    });
+    const upstream = await routeModel("humanoid", [{ role: "system", content: synthesis }], 2048);
 
-    if (!r.ok || !r.body) { send("done", {}); res.end(); return; }
-    const reader = r.body.getReader();
+    if (!upstream.ok || !upstream.body) { send("done", {}); res.end(); return; }
+    const reader = upstream.body.getReader();
     const dec = new TextDecoder();
     let fbuf = "";
 
@@ -632,7 +691,7 @@ router.post("/chat/title", requireAuth, async (req: any, res: Response): Promise
     const r = await fetch(`${OR_BASE}/chat/completions`, {
       method: "POST", headers: OR_HEADERS,
       body: JSON.stringify({
-        model: GEMMA,
+        model: LAGUNA,
         messages: [
           { role: "system", content: "Summarize the user message in 2-4 words as a short chat title. No quotes, no punctuation at end. Output ONLY the title, nothing else." },
           { role: "user", content: body.data.message.slice(0, 400) },
@@ -667,7 +726,7 @@ router.post("/chat/logo", requireAuth, async (req: any, res: Response): Promise<
     const r = await fetch(`${OR_BASE}/chat/completions`, {
       method: "POST", headers: OR_HEADERS,
       body: JSON.stringify({
-        model: NEMOTRON,
+        model: LAGUNA,
         messages: [
           { role: "system", content: "You are a professional SVG logo designer. Output ONLY a valid SVG element (starting with <svg and ending with </svg>) with no markdown, no explanation. Use viewBox=\"0 0 200 200\". Make it clean, minimal, and geometric." },
           { role: "user", content: body.data.prompt },
