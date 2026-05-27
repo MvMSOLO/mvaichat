@@ -453,53 +453,52 @@ router.post("/chat", requireAuth, async (req: any, res: Response): Promise<void>
   if (!OPENROUTER_API_KEY) { res.status(500).json({ error: "OPENROUTER_API_KEY not configured" }); return; }
 
 const model = MODEL_MAP[modelId as string] ?? LAGUNA;
-   const systemContent = buildSystemPrompt(settings, memories as any[], modelId as string);
+  const systemContent = buildSystemPrompt(settings, memories as any[], modelId as string);
 
-   const apiMessages: any[] = [{ role: "system", content: systemContent }];
-   for (const msg of messages as any[]) {
-     if (msg.role === "user" && attachments && (attachments as string[]).length > 0) {
-       const parts: any[] = [{ type: "text", text: msg.content }];
-       for (const url of attachments as string[]) {
-         parts.push({ type: "image_url", image_url: { url } });
-       }
-       apiMessages.push({ role: "user", content: parts });
-     } else {
-       apiMessages.push({ role: msg.role, content: msg.content });
-     }
-   }
+  const apiMessages: any[] = [{ role: "system", content: systemContent }];
+  for (const msg of messages as any[]) {
+    if (msg.role === "user" && attachments && (attachments as string[]).length > 0) {
+      const parts: any[] = [{ type: "text", text: msg.content }];
+      for (const url of attachments as string[]) {
+        parts.push({ type: "image_url", image_url: { url } });
+      }
+      apiMessages.push({ role: "user", content: parts });
+    } else {
+      apiMessages.push({ role: msg.role, content: msg.content });
+    }
+  }
 
-   // For search mode, inject a search result if the query looks factual
-   if (modelId === "search" && messages.length > 0) {
-     const lastMsg = (messages as any[])[messages.length - 1];
-     if (lastMsg.role === "user" && lastMsg.content.length > 5) {
-       const searchResult = await doWebSearch(lastMsg.content.slice(0, 200));
-       apiMessages.push({ role: "system", content: `SEARCH RESULTS FOR THIS QUERY:\n${searchResult}` });
-     }
-   }
+  // For search mode, inject a search result if the query looks factual
+  if (modelId === "search" && messages.length > 0) {
+    const lastMsg = (messages as any[])[messages.length - 1];
+    if (lastMsg.role === "user" && lastMsg.content.length > 5) {
+      const searchResult = await doWebSearch(lastMsg.content.slice(0, 200));
+      apiMessages.push({ role: "system", content: `SEARCH RESULTS FOR THIS QUERY:\n${searchResult}` });
+    }
+  }
 
-let upstream: Response;
-   let usedModel = "";
-   try {
-     upstream = await routeModel(modelId as string, apiMessages, modelId === "code" ? 8192 : modelId === "ideal" ? 6144 : 4096, TOOLS);
-     usedModel = upstream.url?.toString() || LAGUNA;
-   } catch {
-     upstream = {} as Response;
-   }
+  // Try primary model first, fallback if needed
+  let upstream: Response;
+  try {
+    upstream = await routeModel(modelId as string, apiMessages, modelId === "code" ? 8192 : modelId === "ideal" ? 6144 : 4096, TOOLS);
+  } catch {
+    upstream = {} as Response;
+  }
 
-   if (!upstream?.ok) {
-     if (upstream?.status === 429) { res.status(429).json({ error: "Rate limit" }); return; }
-     const err = upstream?.statusText || "Model unavailable";
-     res.status(502).json({ error: `Upstream: ${err}` }); return;
-   }
+  if (!upstream?.ok) {
+    if (upstream?.status === 429) { res.status(429).json({ error: "Rate limit" }); return; }
+    const err = upstream?.statusText || "Model unavailable";
+    res.status(502).json({ error: `Upstream: ${err}` }); return;
+  }
 
-   res.setHeader("Content-Type", "text/event-stream");
-   res.setHeader("Cache-Control", "no-cache");
-   res.setHeader("Connection", "keep-alive");
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
 
-   const providerLabel = getProviderLabel(MODEL_MAP[modelId as string] || LAGUNA);
-   res.write(`event: provider\ndata: ${JSON.stringify({ id: "openrouter", label: providerLabel })}\n\n`);
+  const providerLabel = getProviderLabel(MODEL_MAP[modelId as string] || LAGUNA);
+  res.write(`event: provider\ndata: ${JSON.stringify({ id: "openrouter", label: providerLabel })}\n\n`);
 
-    if (!upstream.body) { res.write("data: [DONE]\n\n"); res.end(); return; }
+  if (!upstream.body) { res.write("data: [DONE]\n\n"); res.end(); return; }
 
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
