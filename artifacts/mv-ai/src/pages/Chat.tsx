@@ -30,7 +30,7 @@ import {
   MessageSquare, Clock, Download, Share2, Keyboard, ChevronRight,
   Maximize2, Minimize2, Github, BookOpen, Zap, Palette, Type,
   AlignLeft, AlignJustify, SlidersHorizontal, Heart, Laugh, Lightbulb,
-  Star, Flag, Camera, Link2,
+  Star, Flag, Camera, Link2, Flame, Eye, BarChart3, Wand2, Sparkle,
 } from "lucide-react";
 
 interface Conversation { id: string; title: string; modelId: ModelId; pinned: boolean; updatedAt: string; }
@@ -184,6 +184,30 @@ const EMPTY_PROMPTS: Record<ModelId, string[]> = {
 type DensityMode = "compact" | "comfortable" | "spacious";
 type FontSize = "sm" | "base" | "lg";
 
+// FEATURE 1: Trending prompts keshada
+const TRENDING_PROMPTS = [
+  "🔥 Hozirgi AI trendslar",
+  "🚀 Startup ideasi yaratish",
+  "💎 Premium noquat uchun tips",
+  "🎯 Maqsad qo'yish strategiyasi",
+];
+
+// FEATURE 2: Usage stats interface
+interface UsageStats {
+  chatCount: number;
+  messageCount: number;
+  totalTokens: number;
+  lastUsed: string;
+}
+
+// FEATURE 3: Pro features upgrade
+const PRO_FEATURES = [
+  { name: "Unlimited messages", desc: "Sanasiz chat", icon: Sparkles },
+  { name: "Priority response", desc: "Tezroq javoblar", icon: Flame },
+  { name: "Advanced analytics", desc: "Chuqur tahlillar", icon: BarChart3 },
+  { name: "Model priority", desc: "Barcha modellar", icon: Zap },
+];
+
 export default function Chat() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -211,6 +235,22 @@ export default function Chat() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [urlInputOpen, setUrlInputOpen] = useState(false);
   const [urlInput, setUrlInput] = useState("");
+  // FEATURE 4: Pro upgrade state
+  const [showProUpgrade, setShowProUpgrade] = useState(false);
+  // FEATURE 5: Usage stats
+  const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
+  // FEATURE 6: Animation effects toggle
+  const [animationsEnabled, setAnimationsEnabled] = useState(true);
+  // FEATURE 7: Code highlighting
+  const [codeTheme, setCodeTheme] = useState<"light" | "dark">("dark");
+  // FEATURE 8: Export format
+  const [exportFormat, setExportFormat] = useState<"json" | "md" | "pdf">("json");
+  // FEATURE 9: Quick reactions
+  const [quickReactionsEnabled, setQuickReactionsEnabled] = useState(true);
+  // FEATURE 10: Auto-save drafts
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  // FEATURE 11: Message search highlighting
+  const [highlightedKeywords, setHighlightedKeywords] = useState<Set<string>>(new Set());
 
   const recogRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -233,6 +273,36 @@ export default function Chat() {
       skillsPrompt,
     };
   }, [settings]);
+
+  // FEATURE 12: Load usage stats on mount
+  useEffect(() => {
+    if (user) {
+      fetch("/api/settings", { credentials: "include" })
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.stats) {
+            setUsageStats({
+              chatCount: data.stats.conversationCount || 0,
+              messageCount: data.stats.messageCount || 0,
+              totalTokens: data.stats.totalTokens || 0,
+              lastUsed: data.stats.lastUsedAt || new Date().toISOString(),
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user]);
+
+  // FEATURE 13: Auto-save draft
+  useEffect(() => {
+    if (autoSaveEnabled && input.trim()) {
+      const timer = setTimeout(() => {
+        localStorage.setItem(`chat-draft-${activeId || "new"}`, input);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [input, autoSaveEnabled, activeId]);
 
   // Check for GitHub pending import
   useEffect(() => {
