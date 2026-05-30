@@ -1,0 +1,23 @@
+{
+  "buildCommand": "pnpm install && pnpm run build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "outputDirectory": "artifacts/mv-ai/dist/public",
+  "framework": "vite",
+  "env": {
+    "VITE_SUPABASE_URL": {
+      "description": "Supabase project URL"
+    },
+    "VITE_SUPABASE_KEY": {
+      "description": "Supabase anon public key"
+    },
+    "VITE_CLERK_PUBLISHABLE_KEY": {
+      "description": "Clerk publishable key"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/update-models",
+      "schedule": "0 */6 * * *"
+    }
+  ]
+}
