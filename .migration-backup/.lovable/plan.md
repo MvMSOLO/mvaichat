@@ -1,1 +1,0 @@
-\n# MV AI v7 — Autonomy & Multi-Provider Plan\n\nAvazbek, oldin ochiq gaplashay — keyin reja. Iltimos diqqat bilan o'qing, chunki ba'zi narsalar **texnik jihatdan iloji yo'q**, va men sizni aldab \

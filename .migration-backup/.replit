@@ -1,4 +1,57 @@
-modules = ["nodejs-20", "web"]
+modules = ["nodejs-20", "python-3.12", "web"]
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+
+[agent]
+stack = "BEST_EFFORT_FALLBACK"
+expertMode = true
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
+
+[[ports]]
+localPort = 3000
+externalPort = 3000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 8082
+externalPort = 3002
+
+[[ports]]
+localPort = 8099
+externalPort = 8099
+
+[[ports]]
+localPort = 21190
+externalPort = 3000
+
+[userenv]
+
+[userenv.shared]
+PORT = "5000"
+BASE_PATH = "/"
+VITE_CLERK_PUBLISHABLE_KEY = "pk_test_bm90ZWQtZm94aG91bmQtNjQuY2xlcmsuYWNjb3VudHMuZGV2JA"
 
 [nix]
 channel = "stable-25_05"

@@ -1,1 +1,0 @@
-ALTER TABLE public.user_settings ADD COLUMN IF NOT EXISTS adult_mode boolean NOT NULL DEFAULT false;
