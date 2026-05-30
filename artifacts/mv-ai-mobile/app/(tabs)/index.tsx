@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,15 +17,25 @@ import { Ionicons, Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@clerk/expo";
 import * as Haptics from "expo-haptics";
+import {
+  apiFetch,
+  getBaseUrl,
+  createConversation,
+  saveMessage,
+  generateTitle,
+  updateConversationTitle,
+  getMessages,
+} from "@/lib/api";
+import type { Conversation, ConversationMessage } from "@/lib/api";
 
 const AI_MODES = [
   { id: "humanoid", label: "Humanoid", icon: "person-outline" as const, color: "#f2470e" },
-  { id: "ideal", label: "Ideal", icon: "sparkles" as const, color: "#a855f7" },
-  { id: "code", label: "Code", icon: "code-slash-outline" as const, color: "#22c55e" },
-  { id: "vision", label: "Vision", icon: "eye-outline" as const, color: "#ec4899" },
-  { id: "search", label: "Search", icon: "search-outline" as const, color: "#eab308" },
-  { id: "agents", label: "Agents", icon: "flash-outline" as const, color: "#0dcff0" },
-];
+  { id: "ideal",    label: "Ideal",    icon: "sparkles" as const,         color: "#a855f7" },
+  { id: "code",     label: "Code",     icon: "code-slash-outline" as const, color: "#22c55e" },
+  { id: "vision",   label: "Vision",   icon: "eye-outline" as const,      color: "#ec4899" },
+  { id: "search",   label: "Search",   icon: "search-outline" as const,   color: "#eab308" },
+  { id: "agents",   label: "Agents",   icon: "flash-outline" as const,    color: "#0dcff0" },
+] as const;
 
 interface Message {
   id: string;
@@ -37,36 +47,27 @@ interface Message {
 let msgCounter = 0;
 function uid() {
   msgCounter++;
-  return `m${Date.now()}-${msgCounter}-${Math.random().toString(36).slice(2, 7)}`;
+  return `m${Date.now()}-${msgCounter}`;
 }
+
+// --- Sub-components ---
 
 function TypingDots({ color }: { color: string }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 8, paddingHorizontal: 4 }}>
       {[0, 1, 2].map((i) => (
-        <View key={i} style={[dot.dot, { backgroundColor: color, opacity: 0.5 + i * 0.15 }]} />
+        <View key={i} style={[dot.dot, { backgroundColor: color, opacity: 0.4 + i * 0.2 }]} />
       ))}
     </View>
   );
 }
 const dot = StyleSheet.create({ dot: { width: 8, height: 8, borderRadius: 4 } });
 
-function ModeChip({
-  mode,
-  selected,
-  onPress,
-}: {
-  mode: (typeof AI_MODES)[0];
-  selected: boolean;
-  onPress: () => void;
-}) {
+function ModeChip({ mode, selected, onPress }: { mode: typeof AI_MODES[number]; selected: boolean; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        chip.base,
-        selected && { backgroundColor: mode.color + "22", borderColor: mode.color },
-      ]}
+      style={[chip.base, selected && { backgroundColor: mode.color + "22", borderColor: mode.color }]}
     >
       <Ionicons name={mode.icon as any} size={14} color={selected ? mode.color : "#8e8fa5"} />
       <Text style={[chip.label, selected && { color: mode.color }]}>{mode.label}</Text>
@@ -75,16 +76,9 @@ function ModeChip({
 }
 const chip = StyleSheet.create({
   base: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#1f2035",
-    backgroundColor: "#10101c",
-    marginRight: 8,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+    borderWidth: 1, borderColor: "#1f2035", backgroundColor: "#10101c", marginRight: 8,
   },
   label: { fontSize: 12, color: "#8e8fa5", fontFamily: "Inter_500Medium" },
 });
@@ -110,8 +104,7 @@ const mb = StyleSheet.create({
   avatar: {
     width: 28, height: 28, borderRadius: 14,
     borderWidth: 1.5, backgroundColor: "#10101c",
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 2,
+    alignItems: "center", justifyContent: "center", marginBottom: 2,
   },
   avatarText: { fontSize: 10, fontWeight: "700", fontFamily: "Inter_700Bold" },
   bubble: { maxWidth: "78%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
@@ -119,6 +112,8 @@ const mb = StyleSheet.create({
   bubbleAI: { backgroundColor: "#10101c", borderBottomLeftRadius: 4 },
   text: { color: "#f5f3ee", fontSize: 15, lineHeight: 22, fontFamily: "Inter_400Regular" },
 });
+
+// --- Main screen ---
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
@@ -132,10 +127,76 @@ export default function ChatScreen() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
   const [selectedMode, setSelectedMode] = useState(AI_MODES[0]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [convTitle, setConvTitle] = useState<string>("MV AI");
   const inputRef = useRef<TextInput>(null);
 
   const bg = isDark ? "#09090f" : "#f5f2ec";
-  const headerBg = isDark ? "#09090f" : "#f5f2ec";
+  const borderColor = isDark ? "#1f2035" : "#e0ddd8";
+  const fgStrong = isDark ? "#f5f3ee" : "#13121f";
+  const fgMuted = isDark ? "#8e8fa5" : "#737373";
+
+  // Stream from /api/chat (mirrors web useChatStream)
+  const streamChat = useCallback(async (
+    convId: string,
+    chatHistory: Array<{ role: string; content: string }>,
+    onChunk: (chunk: string) => void
+  ) => {
+    const token = getToken ? await getToken() : null;
+    const baseUrl = getBaseUrl();
+
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        messages: chatHistory,
+        modelId: "auto",
+        settings: {
+          mode: selectedMode.id,
+          conversationId: convId,
+        },
+      }),
+    });
+
+    if (response.status === 429) throw new Error("rate_limit");
+    if (!response.ok || !response.body) throw new Error("stream_error");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let full = "";
+    let buf = "";
+    let pendingEvent: string | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      let nlIdx: number;
+      while ((nlIdx = buf.indexOf("\n")) !== -1) {
+        let line = buf.slice(0, nlIdx);
+        buf = buf.slice(nlIdx + 1);
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (line.startsWith(":")) continue;
+        if (!line.trim()) { pendingEvent = null; continue; }
+        if (line.startsWith("event: ")) { pendingEvent = line.slice(7).trim(); continue; }
+        if (!line.startsWith("data: ")) continue;
+        const json = line.slice(6).trim();
+        if (json === "[DONE]") return full;
+        if (pendingEvent && pendingEvent !== "message") { pendingEvent = null; continue; }
+        try {
+          const parsed = JSON.parse(json);
+          const chunk = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? parsed.delta?.content ?? "";
+          if (chunk) { full += chunk; onChunk(chunk); }
+        } catch {}
+      }
+    }
+    return full;
+  }, [getToken, selectedMode.id]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -144,102 +205,109 @@ export default function ChatScreen() {
     setInput("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const currentMessages = [...messages];
-    const userMsg: Message = { id: uid(), role: "user", content: text, mode: selectedMode.id };
-    setMessages((prev) => [...prev, userMsg]);
+    // Optimistic user bubble
+    const userMsgId = uid();
+    setMessages((prev) => [...prev, { id: userMsgId, role: "user", content: text, mode: selectedMode.id }]);
     setIsStreaming(true);
     setShowTyping(true);
 
     try {
-      const token = await getToken();
-      const domain = process.env.EXPO_PUBLIC_DOMAIN;
-      const baseUrl = domain ? `https://${domain}` : "";
-
-      const chatHistory = [
-        ...currentMessages.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user" as const, content: text },
-      ];
-
-      const response = await fetch(`${baseUrl}/api/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          messages: chatHistory,
-          mode: selectedMode.id,
-          model: "auto",
-          stream: true,
-        }),
-      });
-
-      if (!response.ok) throw new Error("Response error");
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No stream");
-
-      const decoder = new TextDecoder();
-      let full = "";
-      let buf = "";
-      let added = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6);
-          if (data === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(data);
-            const chunk = parsed.content ?? parsed.delta?.content ?? parsed.choices?.[0]?.delta?.content ?? "";
-            if (!chunk) continue;
-            full += chunk;
-            if (!added) {
-              setShowTyping(false);
-              setMessages((prev) => [
-                ...prev,
-                { id: uid(), role: "assistant", content: full, mode: selectedMode.id },
-              ]);
-              added = true;
-            } else {
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { ...updated[updated.length - 1], content: full };
-                return updated;
-              });
-            }
-          } catch {}
+      // 1. Lazy conversation creation (mirrors web handleSend)
+      let convId = conversationId;
+      if (!convId) {
+        const conv = await createConversation("Yangi suhbat");
+        if (conv) {
+          convId = conv.id;
+          setConversationId(convId);
+          setConvTitle("Yangi suhbat");
         }
       }
 
-      if (!added) {
+      // 2. Persist user message
+      if (convId) {
+        await saveMessage(convId, "user", text);
+      }
+
+      // 3. Build history for streaming
+      const historyForStream = [
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user" as const, content: text },
+      ];
+
+      // 4. Stream AI response
+      let assistantMsgId = uid();
+      let streamedContent = "";
+      let bubbleAdded = false;
+
+      const assistantContent = await streamChat(
+        convId ?? "",
+        historyForStream,
+        (chunk) => {
+          streamedContent += chunk;
+          if (!bubbleAdded) {
+            setShowTyping(false);
+            setMessages((prev) => [
+              ...prev,
+              { id: assistantMsgId, role: "assistant", content: streamedContent, mode: selectedMode.id },
+            ]);
+            bubbleAdded = true;
+          } else {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const idx = updated.findIndex((m) => m.id === assistantMsgId);
+              if (idx !== -1) updated[idx] = { ...updated[idx], content: streamedContent };
+              return updated;
+            });
+          }
+        }
+      );
+
+      const finalContent = assistantContent || streamedContent || "Javob olishda xatolik.";
+      if (!bubbleAdded) {
         setShowTyping(false);
         setMessages((prev) => [
           ...prev,
-          { id: uid(), role: "assistant", content: full || "Javob olishda xatolik.", mode: selectedMode.id },
+          { id: assistantMsgId, role: "assistant", content: finalContent, mode: selectedMode.id },
         ]);
       }
-    } catch {
+
+      // 5. Persist assistant message
+      if (convId) {
+        await saveMessage(convId, "assistant", finalContent);
+      }
+
+      // 6. Generate title for new conversations (mirrors web generateTitle)
+      if (convId && messages.length === 0) {
+        const title = await generateTitle([
+          { role: "user", content: text },
+          { role: "assistant", content: finalContent },
+        ]);
+        if (title) {
+          await updateConversationTitle(convId, title);
+          setConvTitle(title);
+        }
+      }
+    } catch (err: any) {
       setShowTyping(false);
+      let errMsg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
+      if (err?.message === "rate_limit") errMsg = "Sekinroq yuboring. Biroz kuting.";
       setMessages((prev) => [
         ...prev,
-        { id: uid(), role: "assistant", content: "Xatolik yuz berdi. Qayta urinib ko'ring." },
+        { id: uid(), role: "assistant", content: errMsg },
       ]);
     } finally {
       setIsStreaming(false);
       setShowTyping(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
+  }, [input, isStreaming, messages, selectedMode, conversationId, streamChat]);
 
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, [input, isStreaming, messages, selectedMode, getToken]);
+  const handleNewChat = useCallback(() => {
+    setMessages([]);
+    setConversationId(null);
+    setConvTitle("MV AI");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, []);
 
   const reversed = [...messages].reverse();
 
@@ -250,38 +318,32 @@ export default function ChatScreen() {
         style={[
           s.header,
           {
-            backgroundColor: headerBg,
+            backgroundColor: bg,
             paddingTop: Platform.OS === "web" ? 67 : insets.top,
-            borderBottomColor: isDark ? "#1f2035" : "#e0ddd8",
+            borderBottomColor: borderColor,
           },
         ]}
       >
         <View style={s.headerLeft}>
           <View style={[s.modeDot, { backgroundColor: selectedMode.color }]} />
-          <Text style={[s.headerTitle, { color: isDark ? "#f5f3ee" : "#13121f" }]}>
-            MV AI
+          <Text style={[s.headerTitle, { color: fgStrong }]} numberOfLines={1}>
+            {convTitle}
           </Text>
         </View>
-        <Pressable
-          onPress={() => {
-            setMessages([]);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }}
-          style={s.newChatBtn}
-        >
-          <Feather name="plus-square" size={20} color={isDark ? "#8e8fa5" : "#737373"} />
+        <Pressable onPress={handleNewChat} style={s.newChatBtn}>
+          <Feather name="plus-square" size={20} color={fgMuted} />
         </Pressable>
       </View>
 
       {/* Mode selector */}
-      <View style={[s.modeBar, { borderBottomColor: isDark ? "#1f2035" : "#e0ddd8" }]}>
+      <View style={[s.modeBar, { borderBottomColor: borderColor }]}>
         <FlatList
-          data={AI_MODES}
+          data={AI_MODES as any}
           horizontal
-          keyExtractor={(m) => m.id}
+          keyExtractor={(m: any) => m.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10 }}
-          renderItem={({ item }) => (
+          renderItem={({ item }: any) => (
             <ModeChip
               mode={item}
               selected={selectedMode.id === item.id}
@@ -294,23 +356,15 @@ export default function ChatScreen() {
         />
       </View>
 
-      {/* Messages */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior="padding"
-        keyboardVerticalOffset={0}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
+        {/* Messages / Empty state */}
         {messages.length === 0 ? (
           <View style={s.emptyState}>
             <View style={[s.emptyIcon, { borderColor: selectedMode.color }]}>
               <Text style={[s.emptyEmoji, { color: selectedMode.color }]}>AI</Text>
             </View>
-            <Text style={[s.emptyTitle, { color: isDark ? "#f5f3ee" : "#13121f" }]}>
-              {selectedMode.label} rejimi
-            </Text>
-            <Text style={[s.emptyHint, { color: isDark ? "#8e8fa5" : "#737373" }]}>
-              Savol yozing yoki so'rang...
-            </Text>
+            <Text style={[s.emptyTitle, { color: fgStrong }]}>{selectedMode.label} rejimi</Text>
+            <Text style={[s.emptyHint, { color: fgMuted }]}>Savol yozing yoki so'rang...</Text>
           </View>
         ) : (
           <FlatList
@@ -319,7 +373,7 @@ export default function ChatScreen() {
             renderItem={({ item }) => (
               <MessageBubble msg={item} primaryColor={selectedMode.color} />
             )}
-            inverted={messages.length > 0}
+            inverted
             ListHeaderComponent={
               showTyping ? (
                 <View style={{ paddingHorizontal: 24, paddingBottom: 4 }}>
@@ -340,27 +394,24 @@ export default function ChatScreen() {
             s.inputBar,
             {
               paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 8,
-              backgroundColor: isDark ? "#09090f" : "#f5f2ec",
-              borderTopColor: isDark ? "#1f2035" : "#e0ddd8",
+              backgroundColor: bg,
+              borderTopColor: borderColor,
             },
           ]}
         >
           <View
             style={[
               s.inputWrap,
-              {
-                backgroundColor: isDark ? "#181825" : "#ffffff",
-                borderColor: isDark ? "#1f2035" : "#e0ddd8",
-              },
+              { backgroundColor: isDark ? "#181825" : "#ffffff", borderColor },
             ]}
           >
             <TextInput
               ref={inputRef}
-              style={[s.input, { color: isDark ? "#f5f3ee" : "#13121f" }]}
+              style={[s.input, { color: fgStrong }]}
               value={input}
               onChangeText={setInput}
               placeholder="Yozing..."
-              placeholderTextColor={isDark ? "#8e8fa5" : "#737373"}
+              placeholderTextColor={fgMuted}
               multiline
               maxLength={4000}
               blurOnSubmit={false}
@@ -378,7 +429,7 @@ export default function ChatScreen() {
               {isStreaming ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Ionicons name="arrow-up" size={18} color={isDark ? "#09090f" : "#fff"} />
+                <Ionicons name="arrow-up" size={18} color="#09090f" />
               )}
             </Pressable>
           </View>
@@ -390,15 +441,12 @@ export default function ChatScreen() {
 
 const s = StyleSheet.create({
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  modeDot: { width: 8, height: 8, borderRadius: 4 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, marginRight: 8 },
+  modeDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   headerTitle: { fontSize: 18, fontWeight: "700", fontFamily: "Inter_700Bold" },
   newChatBtn: { padding: 4 },
   modeBar: { borderBottomWidth: StyleSheet.hairlineWidth },
@@ -418,8 +466,7 @@ const s = StyleSheet.create({
   input: { flex: 1, fontSize: 15, maxHeight: 120, fontFamily: "Inter_400Regular", paddingTop: 2 },
   sendBtn: {
     width: 36, height: 36, borderRadius: 18,
-    alignItems: "center", justifyContent: "center",
-    alignSelf: "flex-end",
+    alignItems: "center", justifyContent: "center", alignSelf: "flex-end",
   },
   sendBtnDisabled: { opacity: 0.4 },
 });
