@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "MV AI"
+version = "1.0.0"
+id = "artifacts/mv-ai"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21190
+
+[services.development]
+run = "pnpm --filter @workspace/mv-ai run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mv-ai", "run", "build" ]
+publicDir = "artifacts/mv-ai/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21190"
+BASE_PATH = "/"

@@ -1,0 +1,1 @@
+- [MV AI esbuild catch fix](mv-ai-esbuild.md) — esbuild can't parse TypeScript `catch (e: any)` syntax; use `catch (e)` in api-server routes
