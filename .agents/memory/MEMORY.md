@@ -1,1 +1,4 @@
-- [MV AI esbuild catch fix](mv-ai-esbuild.md) — esbuild can't parse TypeScript `catch (e: any)` syntax; use `catch (e)` in api-server routes
+- [Migration backup workflows](migration-backup.md) — .migration-backup/* always fails (no node_modules); never restart them
+- [Tailwind v3 invalid classes](tailwind-v3-gotchas.md) — size-4.5, h-13, duration-600 don't exist in v3; use size-4/size-5, h-12, duration-500
+- [esbuild catch restriction](esbuild-catch.md) — api-server: never write catch (e: any), only catch (e)
+- [Button Fast Refresh warning](button-fast-refresh.md) — buttonVariants export causes HMR "incompatible" warning; harmless, full reload fires instead

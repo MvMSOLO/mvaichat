@@ -52,12 +52,12 @@ function formatTime(ts?: number | string): string {
 
 function TypingDots() {
   return (
-    <motion.div className="flex items-center gap-1.5 py-1 px-1" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex items-center gap-1.5 py-1.5 px-2 rounded-xl" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {[0, 1, 2].map((i) => (
         <motion.span
-          key={i} className="size-2 rounded-full bg-primary/60"
-          animate={{ y: [0, -6, 0], opacity: [0.4, 1, 0.4] }}
-          transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
+          key={i} className={`rounded-full ${i === 0 ? "size-2 bg-primary/80" : i === 1 ? "size-2.5 bg-primary/60" : "size-2 bg-primary/40"}`}
+          animate={{ y: [0, -7, 0], opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.2, ease: "easeInOut" }}
         />
       ))}
     </motion.div>
@@ -99,41 +99,43 @@ function MessageActions({
 
   return (
     <motion.div
-      className="flex items-center gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-wrap"
+      className="flex items-center gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex-wrap"
       initial={{ opacity: 0 }}
     >
-      <button
+      <motion.button
+        whileTap={{ scale: 0.88 }}
         onClick={() => { navigator.clipboard.writeText(content); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-        className="p-1.5 rounded-lg hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+        className="action-btn"
         title="Nusxalash"
       >
         {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
-      </button>
+      </motion.button>
       {onRegenerate && (
-        <button onClick={onRegenerate} className="p-1.5 rounded-lg hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors" title="Qayta yaratish">
+        <motion.button whileTap={{ scale: 0.88 }} onClick={onRegenerate} className="action-btn" title="Qayta yaratish">
           <RotateCcw className="size-3.5" />
-        </button>
+        </motion.button>
       )}
       {onPin && (
-        <button onClick={onPin} className={`p-1.5 rounded-lg transition-colors ${pinned ? "text-primary bg-primary/10" : "hover:bg-muted/80 text-muted-foreground hover:text-foreground"}`} title={pinned ? "Pindan chiqarish" : "Pinlash"}>
+        <motion.button whileTap={{ scale: 0.88 }} onClick={onPin} className={`action-btn ${pinned ? "!text-primary !bg-primary/15" : ""}`} title={pinned ? "Pindan chiqarish" : "Pinlash"}>
           <Pin className="size-3.5" />
-        </button>
+        </motion.button>
       )}
       {onFork && (
-        <button onClick={onFork} className="p-1.5 rounded-lg hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors" title="Bu yerdan yangi chat">
+        <motion.button whileTap={{ scale: 0.88 }} onClick={onFork} className="action-btn" title="Bu yerdan yangi chat">
           <Share2 className="size-3.5" />
-        </button>
+        </motion.button>
       )}
 
       {/* Emoji reactions */}
       <div className="relative">
-        <button
+        <motion.button
+          whileTap={{ scale: 0.88 }}
           onClick={() => setShowEmoji((v) => !v)}
-          className={`p-1.5 rounded-lg transition-colors ${showEmoji ? "bg-primary/10 text-primary" : "hover:bg-muted/80 text-muted-foreground hover:text-foreground"}`}
+          className={`action-btn ${showEmoji ? "!text-primary !bg-primary/15" : ""}`}
           title="Reaksiya"
         >
           <Laugh className="size-3.5" />
-        </button>
+        </motion.button>
         <AnimatePresence>
           {showEmoji && (
             <motion.div
@@ -211,6 +213,9 @@ export default function Chat() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [urlInputOpen, setUrlInputOpen] = useState(false);
   const [urlInput, setUrlInput] = useState("");
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [convsLoading, setConvsLoading] = useState(true);
 
   const recogRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -250,14 +255,19 @@ export default function Chat() {
 
   const loadConversations = useCallback(async () => {
     if (!user) return;
-    const r = await fetch("/api/conversations", { credentials: "include" });
-    if (r.ok) {
-      const data: Conversation[] = await r.json();
-      data.sort((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-      });
-      setConversations(data);
+    setConvsLoading(true);
+    try {
+      const r = await fetch("/api/conversations", { credentials: "include" });
+      if (r.ok) {
+        const data: Conversation[] = await r.json();
+        data.sort((a, b) => {
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        });
+        setConversations(data);
+      }
+    } finally {
+      setConvsLoading(false);
     }
   }, [user]);
 
@@ -276,9 +286,18 @@ export default function Chat() {
     });
   }, [activeId]);
 
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setIsAtBottom(atBottom);
+  }, []);
+
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, streaming]);
+    if (isAtBottom) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages, streaming, isAtBottom]);
 
   useEffect(() => {
     if (streaming) setMood("speaking");
@@ -622,19 +641,32 @@ export default function Chat() {
         <div className="flex items-center gap-2 mb-4">
           <BrandMark size={32} />
           <span className="font-display text-lg tracking-tight">MV AI</span>
-          <span className="ml-auto text-[9px] font-mono uppercase tracking-widest text-primary/60 px-1.5 py-0.5 rounded-full border border-primary/20">v7</span>
+          <span className="ml-auto flex items-center gap-1.5">
+            {!convsLoading && conversations.length > 0 && (
+              <span className="text-[9px] tabular-nums text-muted-foreground/40">{conversations.length}</span>
+            )}
+            <span className="text-[9px] font-mono uppercase tracking-widest text-primary/60 px-1.5 py-0.5 rounded-full border border-primary/20">v9</span>
+          </span>
         </div>
-        <Button onClick={newChat} className="w-full rounded-xl bg-ink text-ink-foreground hover:bg-ink/90 h-10 font-semibold shine">
-          <Plus className="size-4" /> Yangi chat
-        </Button>
+        <motion.div whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.01 }}>
+          <Button onClick={newChat} variant="ink" className="w-full rounded-xl h-10 font-semibold shine">
+            <Plus className="size-4" /> Yangi chat
+          </Button>
+        </motion.div>
         <div className="mt-2 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/60" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Chatlarni qidirish…"
-            className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-muted/50 border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/60"
+            className="w-full pl-8 pr-8 py-2 text-xs rounded-xl bg-muted/40 border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:bg-muted/60 placeholder:text-muted-foreground/50 transition-colors"
           />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors">
+              <X className="size-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -644,34 +676,75 @@ export default function Chat() {
             <Pin className="size-2.5" /> Pinlangan xabarlar ({pinnedMsgIndices.size})
           </div>
         )}
+        {convsLoading && conversations.length === 0 && (
+          <div className="space-y-0.5 px-1">
+            {[70, 90, 55, 80, 65].map((w, i) => (
+              <div key={i} className="px-3 py-2.5 rounded-xl">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="skeleton size-2 rounded-full shrink-0" />
+                  <span className={`skeleton h-2.5 rounded-full`} style={{ width: `${w}%` }} />
+                </div>
+                <span className="skeleton h-2 rounded-full ml-4" style={{ width: "35%" }} />
+              </div>
+            ))}
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {filteredConversations.map((c) => (
             <motion.div
               key={c.id} layout
               initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-              className={`group flex items-center gap-1 rounded-xl transition-colors ${activeId === c.id ? "bg-primary/10" : "hover:bg-muted/60"}`}
+              className={`group relative flex items-center gap-1 rounded-xl transition-colors ${activeId === c.id ? "bg-primary/10 conv-item-active" : "hover:bg-muted/60"}`}
             >
               <button onClick={() => { setActiveId(c.id); setModelId(c.modelId as ModelId); setSheetOpen(false); }}
-                className="flex-1 text-left px-3 py-2.5 truncate text-sm">
-                {c.pinned && <Pin className="inline size-3 mr-1 text-primary" />}
-                <span className={`font-medium ${activeId === c.id ? "text-primary" : ""}`}>{c.title}</span>
-                <div className="text-[10px] text-muted-foreground/60 mt-0.5">{formatTime(c.updatedAt)}</div>
+                className="flex-1 text-left px-3 py-2.5 min-w-0 text-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`size-2 shrink-0 rounded-full bg-gradient-to-br ${MODELS[c.modelId as ModelId]?.gradient || "from-primary to-secondary"}`} />
+                  {c.pinned && <Pin className="size-3 text-primary shrink-0" />}
+                  <span className={`font-medium truncate ${activeId === c.id ? "text-primary" : ""}`}>{c.title}</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground/50 mt-0.5 pl-4">{formatTime(c.updatedAt)}</div>
               </button>
-              <div className="flex opacity-0 group-hover:opacity-100 transition pr-1 gap-0.5">
-                <button onClick={() => togglePin(c)} className="p-1.5 hover:bg-background rounded-md"><Pin className="size-3" /></button>
-                <button onClick={() => deleteConv(c.id)} className="p-1.5 hover:bg-background rounded-md text-destructive"><Trash2 className="size-3" /></button>
+              <div className="flex opacity-0 group-hover:opacity-100 transition-opacity pr-1 gap-0.5 shrink-0">
+                <motion.button whileTap={{ scale: 0.88 }} onClick={() => togglePin(c)} className="action-btn text-muted-foreground/60" title={c.pinned ? "Pindan chiqarish" : "Pinlash"}>
+                  <Pin className={`size-3 ${c.pinned ? "text-primary fill-primary" : ""}`} />
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.88 }} onClick={() => deleteConv(c.id)} className="action-btn !hover:bg-destructive/10 !hover:text-destructive text-muted-foreground/50" title="O'chirish">
+                  <Trash2 className="size-3" />
+                </motion.button>
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
-        {filteredConversations.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-8 px-4">
-            {searchQuery ? "Hech narsa topilmadi" : "Hali chatlar yo'q.\nQuyida boshlang."}
-          </p>
+        {filteredConversations.length === 0 && !convsLoading && (
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            className="text-center py-10 px-4">
+            <div className="text-2xl mb-2 opacity-40">{searchQuery ? "🔍" : "✨"}</div>
+            <p className="text-xs text-muted-foreground/60 leading-relaxed">
+              {searchQuery
+                ? `"${searchQuery}" — hech narsa topilmadi`
+                : "Hali chatlar yo'q. Yuqoridagi «Yangi chat» tugmasini bosing."}
+            </p>
+          </motion.div>
         )}
       </div>
 
       <div className="p-2 border-t border-border/60 space-y-0.5">
+        {user && (
+          <div className="flex items-center gap-2.5 px-3 py-2.5 mb-1 rounded-xl hover:bg-muted/40 transition-colors cursor-default">
+            {user.imageUrl ? (
+              <img src={user.imageUrl} alt={user.fullName || ""} className="size-7 rounded-full object-cover ring-1 ring-border/40 shrink-0" />
+            ) : (
+              <div className="size-7 rounded-full bg-gradient-to-br from-primary to-secondary grid place-items-center shrink-0">
+                <span className="text-[10px] font-bold text-white">{(user.firstName?.[0] || user.primaryEmailAddress?.emailAddress?.[0] || "?").toUpperCase()}</span>
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold truncate">{user.fullName || user.primaryEmailAddress?.emailAddress?.split("@")[0] || "Foydalanuvchi"}</div>
+              <div className="text-[10px] text-muted-foreground/50 truncate">{user.primaryEmailAddress?.emailAddress}</div>
+            </div>
+          </div>
+        )}
         <Button variant="ghost" className="w-full justify-start rounded-xl h-9 font-medium text-sm gap-2" onClick={() => navigate("/skills")}>
           <BookOpen className="size-4" /> Skills
         </Button>
@@ -760,7 +833,8 @@ export default function Chat() {
 
       <main className="flex-1 flex flex-col min-w-0 z-10">
         {/* Top bar */}
-        <header className="flex items-center justify-between gap-2 px-3 md:px-5 py-3 border-b border-border/60 glass-strong">
+        <header className="relative flex items-center justify-between gap-2 px-3 md:px-5 py-3 border-b border-border/60 glass-strong overflow-hidden">
+          {streaming && <span className="streaming-bar" />}
           <div className="flex items-center gap-2">
             {/* Mobile sidebar */}
             <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -804,7 +878,7 @@ export default function Chat() {
                       <div className="font-semibold text-sm">{m.name}</div>
                       <div className="text-xs text-muted-foreground truncate">{m.tagline}</div>
                     </div>
-                    {modelId === m.id && <span className="size-1.5 rounded-full bg-primary shrink-0" />}
+                    {modelId === m.id && <Check className="size-3.5 text-primary shrink-0" />}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -812,7 +886,19 @@ export default function Chat() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            {provider && (
+            <AnimatePresence>
+              {streaming && (
+                <motion.span
+                  key="streaming-badge"
+                  initial={{ opacity: 0, scale: 0.85, x: 8 }} animate={{ opacity: 1, scale: 1, x: 0 }} exit={{ opacity: 0, scale: 0.85, x: 8 }}
+                  className="hidden sm:inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full glass border border-primary/25 text-primary/70"
+                >
+                  <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+                  Javob generatsiya qilinmoqda…
+                </motion.span>
+              )}
+            </AnimatePresence>
+            {provider && !streaming && (
               <motion.span
                 initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
                 className="hidden sm:inline-flex text-[10px] uppercase tracking-wider px-2 py-1 rounded-full glass border border-border/40 text-muted-foreground"
@@ -880,14 +966,28 @@ export default function Chat() {
               <ThemeSwitcher compact />
             </div>
 
-            <Button size="icon" variant="ghost" onClick={() => setPanelOpen(true)} className="rounded-xl size-8">
+            <Button size="icon" variant="ghost" onClick={() => setPanelOpen(true)} className="rounded-xl size-8" title="Panel (Ctrl+P)">
               <LayoutPanelLeft className="size-4" />
             </Button>
           </div>
         </header>
 
         {/* Messages */}
-        <div ref={scrollRef} className={`flex-1 overflow-y-auto px-3 md:px-6 ${densityPad}`}>
+        <div ref={scrollRef} onScroll={handleScroll} className={`flex-1 overflow-y-auto px-3 md:px-6 ${densityPad} relative`}>
+          <AnimatePresence>
+            {!isAtBottom && (
+              <motion.button
+                initial={{ opacity: 0, y: 8, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.9 }}
+                onClick={() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); setIsAtBottom(true); }}
+                className="fixed bottom-28 right-6 z-20 glass-strong rounded-full p-2.5 border border-border/50 shadow-elev hover:border-primary/30 hover:bg-primary/10 transition-colors"
+                title="Pastga o'tish"
+              >
+                <ChevronDown className="size-4 text-muted-foreground" />
+              </motion.button>
+            )}
+          </AnimatePresence>
           <ModeShell mode={modelId}>
             {messages.length === 0 ? (
               <EmptyState model={ActiveModel} onPick={(s) => { setInput(s); inputRef.current?.focus(); }} mood={mood} />
@@ -925,10 +1025,10 @@ export default function Chat() {
 
                         <div className="flex flex-col items-start max-w-[85%]">
                           <motion.div
-                            className={`rounded-3xl px-4 py-3 ${
+                            className={`rounded-3xl px-4 py-3 transition-shadow duration-200 ${
                               isUser
-                                ? "bg-ink text-ink-foreground rounded-tr-md shadow-md"
-                                : `glass rounded-tl-md border ${isPinned ? "border-primary/30 shadow-[0_0_20px_-8px_hsl(var(--primary)/0.3)]" : "border-border/30"}`
+                                ? "bg-ink text-ink-foreground rounded-tr-md shadow-md msg-user"
+                                : `glass rounded-tl-md border msg-assistant ${isPinned ? "border-primary/30 shadow-[0_0_20px_-8px_hsl(var(--primary)/0.3)]" : "border-border/30"}`
                             }`}
                             whileHover={isUser ? { scale: 1.003 } : {}}
                           >
@@ -1044,10 +1144,12 @@ export default function Chat() {
                   {pendingAttachments.map((a, i) => (
                     <motion.div key={i} layout className="relative">
                       <img src={a} className="size-16 object-cover rounded-xl border border-border" />
-                      <button onClick={() => setPendingAttachments((p) => p.filter((_, j) => j !== i))}
-                        className="absolute -top-1 -right-1 size-5 bg-destructive text-destructive-foreground rounded-full grid place-items-center">
+                      <motion.button
+                        whileTap={{ scale: 0.85 }}
+                        onClick={() => setPendingAttachments((p) => p.filter((_, j) => j !== i))}
+                        className="absolute -top-1 -right-1 size-5 bg-destructive text-destructive-foreground rounded-full grid place-items-center shadow-sm">
                         <X className="size-3" />
-                      </button>
+                      </motion.button>
                     </motion.div>
                   ))}
                 </motion.div>
@@ -1055,9 +1157,15 @@ export default function Chat() {
             </AnimatePresence>
 
             <motion.div
-              className="glass-strong rounded-3xl shadow-soft border border-border/40 overflow-hidden"
-              animate={streaming ? { boxShadow: "0 0 0 1px hsl(var(--primary)/0.3), 0 0 30px -8px hsl(var(--primary)/0.25)" } : {}}
-              transition={{ duration: 0.3 }}
+              className="glass-strong rounded-3xl shadow-soft border overflow-hidden"
+              animate={
+                streaming
+                  ? { boxShadow: "0 0 0 1px hsl(var(--primary)/0.4), 0 0 30px -8px hsl(var(--primary)/0.3)", borderColor: "hsl(var(--primary)/0.3)" }
+                  : inputFocused
+                  ? { boxShadow: "0 0 0 1px hsl(var(--primary)/0.2), 0 0 16px -8px hsl(var(--primary)/0.15)", borderColor: "hsl(var(--border)/0.7)" }
+                  : { boxShadow: "none", borderColor: "hsl(var(--border)/0.4)" }
+              }
+              transition={{ duration: 0.25 }}
             >
               <div className="flex items-end gap-1.5 p-2">
                 {/* Image attach */}
@@ -1087,29 +1195,37 @@ export default function Chat() {
                   ref={inputRef}
                   value={input}
                   onChange={handleInputChange}
+                  onFocus={() => setInputFocused(true)}
+                  onBlur={() => setInputFocused(false)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
                     if (e.key === "Escape") { setInput(""); if (inputRef.current) inputRef.current.style.height = "auto"; }
                   }}
                   placeholder={`${ActiveModel.name} ga yozing… · Shift+Enter yangi qator · Ctrl+V rasm`}
                   rows={1}
-                  className="flex-1 bg-transparent outline-none resize-none px-2 py-2.5 text-sm placeholder:text-muted-foreground/50 leading-relaxed"
+                  className="flex-1 bg-transparent outline-none resize-none px-2 py-2.5 text-sm placeholder:text-muted-foreground/40 leading-relaxed"
                   style={{ minHeight: 40, maxHeight: 160 }}
                 />
 
                 {/* Voice mode button */}
-                <Button
-                  size="icon" variant="ghost"
-                  onClick={() => setVoiceModeOpen(true)}
-                  className="rounded-xl shrink-0 size-9 hover:bg-violet-500/10 text-muted-foreground hover:text-violet-400"
-                  title="Ideal Voice Mode"
-                >
-                  <Mic className="size-4" />
-                </Button>
+                <motion.div whileTap={{ scale: 0.9 }} className="relative">
+                  {listening && (
+                    <span className="absolute inset-0 rounded-xl bg-violet-500/20 animate-ping-slow" />
+                  )}
+                  <Button
+                    size="icon" variant="ghost"
+                    onClick={() => setVoiceModeOpen(true)}
+                    className={`relative rounded-xl shrink-0 size-9 ${listening ? "bg-violet-500/15 text-violet-400" : "hover:bg-violet-500/10 text-muted-foreground hover:text-violet-400"}`}
+                    title="Ideal Voice Mode"
+                  >
+                    <Mic className="size-4" />
+                  </Button>
+                </motion.div>
 
                 {streaming ? (
-                  <motion.div whileTap={{ scale: 0.9 }}>
-                    <Button size="icon" variant="destructive" onClick={stop} className="rounded-xl shrink-0 size-9">
+                  <motion.div whileTap={{ scale: 0.9 }} className="relative">
+                    <span className="absolute inset-0 rounded-xl bg-destructive/30 animate-ping-slow" />
+                    <Button size="icon" variant="destructive" onClick={stop} className="relative rounded-xl shrink-0 size-9">
                       <Square className="size-4" />
                     </Button>
                   </motion.div>
@@ -1118,7 +1234,8 @@ export default function Chat() {
                     <Button
                       size="icon" onClick={() => handleSend()}
                       disabled={!input.trim() && !pendingAttachments.length}
-                      className="rounded-xl bg-ink text-ink-foreground hover:bg-ink/90 shrink-0 size-9 disabled:opacity-30 shine"
+                      variant={(input.trim() || pendingAttachments.length) ? "glow" : "ink"}
+                      className="rounded-xl shrink-0 size-9 disabled:opacity-30 shine"
                     >
                       <Send className="size-4" />
                     </Button>
@@ -1129,11 +1246,21 @@ export default function Chat() {
               <div className="flex items-center justify-between px-4 pb-2 text-[10px] text-muted-foreground/40">
                 <span className="flex items-center gap-1">
                   <Sparkles className="size-2.5" />
-                  MV AI v7 · {ActiveModel.tagline}
+                  MV AI v9 · {ActiveModel.tagline}
                 </span>
-                <span className="hidden sm:flex items-center gap-1">
-                  <Keyboard className="size-2.5" /> ⌘K buyruqlar · Enter yuborish
-                </span>
+                <AnimatePresence mode="wait">
+                  {input.length > 30 ? (
+                    <motion.span key="count" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                      className="tabular-nums">
+                      {input.length} belgi
+                    </motion.span>
+                  ) : (
+                    <motion.span key="hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                      className="hidden sm:flex items-center gap-1">
+                      <Keyboard className="size-2.5" /> ⌘K buyruqlar · Enter yuborish
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </div>
             </motion.div>
           </div>

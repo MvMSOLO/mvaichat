@@ -1,4 +1,4 @@
-# MV AI v9
+# MV AI v9 — Living AI Cockpit
 
 MV AI is a "living AI cockpit" — a cinematic multi-modal AI chat app with 8 AI modes, multi-model routing with automatic fallback, 12+ MCP tools, and Ozing, the AI companion mascot with 19 mood states.
 

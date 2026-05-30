@@ -74,7 +74,7 @@ export default function Landing() {
             <BrandMark size={28} />
             <span className="font-display font-bold tracking-tight text-base">MV AI</span>
             <span className="hidden sm:inline ml-1 text-[10px] font-mono uppercase tracking-widest text-primary/80 px-1.5 py-0.5 rounded-full border border-primary/30">
-              v7
+              v9
             </span>
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-foreground/80">
@@ -133,7 +133,7 @@ export default function Landing() {
                 <span className="absolute inset-0 rounded-full bg-primary animate-ping-slow opacity-75" />
                 <span className="relative size-2 rounded-full bg-primary" />
               </span>
-              MV AI v7 — living AI cockpit
+              MV AI v9 — living AI cockpit
               <Sparkles className="size-3 text-primary" />
             </span>
           </motion.div>
@@ -150,7 +150,7 @@ export default function Landing() {
                 A living
               </span>
             </span>
-            <span className="block text-foreground">AI cockpit. <span className="text-[2rem] sm:text-5xl md:text-[5rem] text-primary/80 font-mono">v7</span></span>
+            <span className="block text-foreground">AI cockpit. <span className="text-[2rem] sm:text-5xl md:text-[5rem] text-primary/80 font-mono">v9</span></span>
           </motion.h1>
 
           <motion.p
